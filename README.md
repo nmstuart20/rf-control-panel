@@ -22,7 +22,7 @@ python3 server.py
 Edit `scenarios.json` to define a scenario and what commands and equipment are needed to run it.
 
 Hardware listed in a scenario appears in the connection status section. Configure its
-probe once in the top-level `hardware_checks` object. Supported probes are:
+probe once in the top-level `hardware_checks` object. Current supported probes are:
 
 ```json
 "hardware_checks": {
@@ -34,7 +34,6 @@ probe once in the top-level `hardware_checks` object. Supported probes are:
 ```
 
 The equipment name in `hardware_checks` must exactly match the name in a scenario.
-An unconfigured device is reported as such rather than assumed to be connected.
 
 Scenarios can expose numeric arguments in the panel. Put a full placeholder in a
 command value to substitute the validated input:

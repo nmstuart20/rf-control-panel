@@ -1,6 +1,7 @@
 {
   "hardware_checks": {
-    "Signal Hound VSG60A": {"type": "signalhound", "timeout": 5}
+    "Signal Hound VSG60A": {"type": "signalhound", "timeout": 5},
+    "Example modem": {"type": "tcp", "host": "192.0.2.10", "port": 80, "timeout": 3}
   },
   "scenarios": [
     {
@@ -36,6 +37,26 @@
         {
           "name": "Generate stepped sweep",
           "command": ["python3", "-u", "sweep.py", "--mode", "stepped", "--center", "{center}", "--span", "{span}", "--sample-rate", "{sample_rate}", "--level", "{level}", "--points", "201", "--dwell", "0.005"]
+        }
+      ]
+    },
+    {
+      "id": "example-modem-setup",
+      "name": "Example modem setup",
+      "description": "Placeholder sequence that checks a modem, applies a test profile, and enables transmission.",
+      "equipment": ["Example modem"],
+      "steps": [
+        {
+          "name": "Check modem status",
+          "command": ["./modem_control.sh", "status"]
+        },
+        {
+          "name": "Apply test profile",
+          "command": ["./modem_control.sh", "set-profile", "lab-test"]
+        },
+        {
+          "name": "Enable modem transmitter",
+          "command": ["./modem_control.sh", "enable-transmit"]
         }
       ]
     }

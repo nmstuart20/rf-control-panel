@@ -16,8 +16,19 @@
       <div id="hardware" class="hardware-list" aria-live="polite"><p class="notice">Checking hardware…</p></div>
     </section>
     <section aria-labelledby="scenarios-heading">
-      <div class="section-heading"><h2 id="scenarios-heading">Scenarios</h2><p>Choose a scenario to start its hardware sequence.</p></div>
-      <div id="scenarios" class="scenario-list"><p class="notice">Loading scenarios…</p></div>
+      <div class="section-heading"><h2 id="scenarios-heading">Scenarios</h2><p>Choose a predefined scenario from the dropdown list</p></div>
+      <form id="scenario-form" class="scenario-form">
+        <div class="field scenario-select">
+          <label for="scenario-select">Scenario</label>
+          <select id="scenario-select" disabled><option>Loading scenarios…</option></select>
+        </div>
+        <div id="scenario-description" class="scenario-description"></div>
+        <div id="scenario-arguments" class="argument-grid"></div>
+        <div class="scenario-actions">
+          <span id="scenario-equipment" class="equipment"></span>
+          <button id="run-scenario" type="submit" data-run disabled>Run scenario</button>
+        </div>
+      </form>
     </section>
     <section class="run-panel" aria-labelledby="run-heading">
       <div class="section-heading run-heading">

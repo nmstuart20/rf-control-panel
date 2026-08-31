@@ -36,6 +36,18 @@ probe once in the top-level `hardware_checks` object. Supported probes are:
 The equipment name in `hardware_checks` must exactly match the name in a scenario.
 An unconfigured device is reported as such rather than assumed to be connected.
 
+Scenarios can expose numeric arguments in the panel. Put a full placeholder in a
+command value to substitute the validated input:
+
+```json
+"arguments": [
+  {"id": "center", "label": "Center frequency", "type": "number", "default": 1000000000, "min": 50000000, "max": 6000000000, "step": 1000000, "unit": "Hz"}
+],
+"steps": [
+  {"name": "Transmit", "command": ["python3", "sweep.py", "--center", "{center}"]}
+]
+```
+
 ```json
 {
   "id": "lab-test",
@@ -52,3 +64,5 @@ An unconfigured device is reported as such rather than assumed to be connected.
 ```
 
 Currently need to ensure the Signal Hound library can access the USB device (typically through the vendor's udev rules), and run the panel from this directory so the provided library path resolves correctly.
+
+Make sure `libvsg_api.so.1.2.1` and `vsg_api.py` are in the PATH if using SignalHound.the vsgdevice folder with `the vsgdevice folder with `

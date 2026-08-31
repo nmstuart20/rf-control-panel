@@ -35,6 +35,16 @@ def load_catalog(path: Path) -> dict[str, dict]:
             raise ValueError("every scenario needs a string id")
         if item["id"] in result:
             raise ValueError(f"duplicate scenario id: {item['id']}")
+        arguments = item.get("arguments", [])
+        if not isinstance(arguments, list):
+            raise ValueError(f"scenario {item['id']} has invalid arguments")
+        argument_ids = set()
+        for argument in arguments:
+            if not isinstance(argument, dict) or not isinstance(argument.get("id"), str):
+                raise ValueError(f"scenario {item['id']} has an invalid argument")
+            if argument["id"] in argument_ids or argument.get("type", "number") not in {"number", "integer"}:
+                raise ValueError(f"scenario {item['id']} has an invalid argument")
+            argument_ids.add(argument["id"])
         steps = item.get("steps")
         if not isinstance(steps, list) or not steps:
             raise ValueError(f"scenario {item['id']} needs at least one step")
@@ -90,7 +100,7 @@ class Runner:
     def scenarios(self) -> list[dict]:
         safe = []
         for item in self.catalog().values():
-            safe.append({key: item.get(key) for key in ("id", "name", "description", "equipment")})
+            safe.append({key: item.get(key) for key in ("id", "name", "description", "equipment", "arguments")})
         return safe
 
     def hardware(self) -> list[dict]:
@@ -160,10 +170,17 @@ class Runner:
         with self.lock:
             return self.run.public() if self.run else None
 
-    def start(self, scenario_id: str) -> dict:
+    def start(self, scenario_id: str, supplied_arguments: object = None) -> dict:
         scenario = self.catalog().get(scenario_id)
         if scenario is None:
             raise KeyError("unknown scenario")
+        values = self._validate_arguments(scenario, supplied_arguments)
+        prepared = dict(scenario)
+        prepared["steps"] = []
+        for step in scenario["steps"]:
+            prepared_step = dict(step)
+            prepared_step["command"] = [values.get(token[1:-1], token) if token.startswith("{") and token.endswith("}") else token for token in step["command"]]
+            prepared["steps"].append(prepared_step)
         with self.lock:
             if self.run and self.run.state in {"starting", "running", "stopping"}:
                 raise RuntimeError("another scenario is already running")
@@ -173,8 +190,30 @@ class Runner:
                 scenario_name=scenario.get("name", scenario_id),
             )
             self.run = run
-            threading.Thread(target=self._execute, args=(run, scenario), daemon=True).start()
+            threading.Thread(target=self._execute, args=(run, prepared), daemon=True).start()
             return run.public()
+
+    @staticmethod
+    def _validate_arguments(scenario: dict, supplied: object) -> dict[str, str]:
+        supplied = supplied if isinstance(supplied, dict) else {}
+        definitions = scenario.get("arguments", [])
+        allowed = {item["id"] for item in definitions}
+        if any(key not in allowed for key in supplied):
+            raise ValueError("unknown scenario argument")
+        values = {}
+        for item in definitions:
+            argument_id = item["id"]
+            raw = supplied.get(argument_id, item.get("default"))
+            try:
+                value = int(raw) if item.get("type") == "integer" else float(raw)
+            except (TypeError, ValueError) as exc:
+                raise ValueError(f"{item.get('label', argument_id)} must be a number") from exc
+            if "min" in item and value < item["min"]:
+                raise ValueError(f"{item.get('label', argument_id)} must be at least {item['min']}")
+            if "max" in item and value > item["max"]:
+                raise ValueError(f"{item.get('label', argument_id)} must be no more than {item['max']}")
+            values[argument_id] = str(value)
+        return values
 
     def stop(self) -> dict:
         with self.lock:
@@ -296,7 +335,7 @@ class Handler(SimpleHTTPRequestHandler):
         try:
             body = self._body()
             if path == "/api/run":
-                self._json({"run": self.runner.start(body.get("scenario_id"))}, HTTPStatus.ACCEPTED)
+                self._json({"run": self.runner.start(body.get("scenario_id"), body.get("arguments"))}, HTTPStatus.ACCEPTED)
             elif path == "/api/stop":
                 self._json({"run": self.runner.stop()}, HTTPStatus.ACCEPTED)
             else:

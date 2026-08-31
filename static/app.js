@@ -1,7 +1,11 @@
-const scenarios = document.querySelector('#scenarios');
+const scenarioForm = document.querySelector('#scenario-form');
+const scenarioSelect = document.querySelector('#scenario-select');
+const scenarioArguments = document.querySelector('#scenario-arguments');
+const runButton = document.querySelector('#run-scenario');
 const hardware = document.querySelector('#hardware');
 const stopButton = document.querySelector('#stop');
 let active = false;
+let scenarioCatalog = [];
 
 async function api(path, options = {}) {
   const response = await fetch(path, {headers: {'Content-Type': 'application/json'}, ...options});
@@ -13,25 +17,46 @@ async function api(path, options = {}) {
 async function loadScenarios() {
   try {
     const data = await api('/api/scenarios');
-    scenarios.innerHTML = '';
-    for (const item of data.scenarios) {
-      const card = document.createElement('article');
-      card.className = 'scenario';
-      const details = document.createElement('div');
-      const name = document.createElement('h3'); name.textContent = item.name || item.id;
-      const desc = document.createElement('p'); desc.textContent = item.description || '';
-      const equipment = document.createElement('div'); equipment.className = 'equipment'; equipment.textContent = (item.equipment || []).join(' · ');
-      const button = document.createElement('button'); button.type = 'button'; button.textContent = 'Run'; button.dataset.run = item.id;
-      button.onclick = () => start(item.id);
-      details.append(name, desc, equipment);
-      card.append(details, button); scenarios.append(card);
+    scenarioCatalog = data.scenarios;
+    scenarioSelect.replaceChildren();
+    for (const item of scenarioCatalog) {
+      const option = document.createElement('option'); option.value = item.id; option.textContent = item.name || item.id;
+      scenarioSelect.append(option);
     }
+    scenarioSelect.disabled = !scenarioCatalog.length;
+    renderScenario();
   } catch (error) {
-    scenarios.replaceChildren();
-    const notice = document.createElement('p'); notice.className = 'notice'; notice.textContent = error.message;
-    scenarios.append(notice);
+    scenarioSelect.replaceChildren(new Option(error.message, ''));
   }
 }
+
+function renderScenario() {
+  const scenario = scenarioCatalog.find(item => item.id === scenarioSelect.value);
+  scenarioArguments.replaceChildren();
+  document.querySelector('#scenario-description').textContent = scenario?.description || '';
+  document.querySelector('#scenario-equipment').textContent = scenario?.equipment?.length ? `Uses: ${scenario.equipment.join(', ')}` : '';
+  for (const argument of scenario?.arguments || []) {
+    const field = document.createElement('div'); field.className = 'field';
+    const label = document.createElement('label'); label.htmlFor = `argument-${argument.id}`; label.textContent = argument.label || argument.id;
+    const wrapper = document.createElement('div'); wrapper.className = 'input-with-unit';
+    const input = document.createElement('input'); input.type = 'number'; input.id = `argument-${argument.id}`;
+    input.name = argument.id; input.value = argument.default; input.required = true;
+    if (argument.min !== undefined) input.min = argument.min;
+    if (argument.max !== undefined) input.max = argument.max;
+    input.step = argument.step ?? 'any';
+    wrapper.append(input);
+    if (argument.unit) { const unit = document.createElement('span'); unit.textContent = argument.unit; wrapper.append(unit); }
+    field.append(label, wrapper); scenarioArguments.append(field);
+  }
+  runButton.disabled = !scenario || active;
+}
+
+scenarioSelect.addEventListener('change', renderScenario);
+scenarioForm.addEventListener('submit', event => {
+  event.preventDefault();
+  const argumentsToSend = Object.fromEntries(new FormData(scenarioForm));
+  start(scenarioSelect.value, argumentsToSend);
+});
 
 async function loadHardware() {
   try {
@@ -63,9 +88,8 @@ async function loadHardware() {
   }
 }
 
-async function start(id) {
-  if (!confirm('Start this RF scenario? Confirm the RF path and attenuation are safe.')) return;
-  try { await api('/api/run', {method: 'POST', body: JSON.stringify({scenario_id: id})}); await poll(); }
+async function start(id, argumentsToSend) {
+  try { await api('/api/run', {method: 'POST', body: JSON.stringify({scenario_id: id, arguments: argumentsToSend})}); await poll(); }
   catch (error) { alert(error.message); }
 }
 

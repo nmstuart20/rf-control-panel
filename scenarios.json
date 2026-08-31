@@ -1,0 +1,28 @@
+{
+  "scenarios": [
+    {
+      "id": "vsg-chirp-1ghz",
+      "name": "1 GHz chirp",
+      "description": "20 MHz triangular chirp centered at 1 GHz for 10 seconds.",
+      "equipment": ["Signal Hound VSG60A"],
+      "steps": [
+        {
+          "name": "Generate chirp",
+          "command": ["python3", "-u", "sweep.py", "--mode", "chirp", "--center", "1000000000", "--span", "20000000", "--level", "-20", "--duration", "10"]
+        }
+      ]
+    },
+    {
+      "id": "vsg-stepped-1ghz",
+      "name": "1 GHz stepped sweep",
+      "description": "201-point, 200 MHz-wide stepped sweep centered at 1 GHz.",
+      "equipment": ["Signal Hound VSG60A"],
+      "steps": [
+        {
+          "name": "Generate stepped sweep",
+          "command": ["python3", "-u", "sweep.py", "--mode", "stepped", "--center", "1000000000", "--span", "200000000", "--level", "-20", "--points", "201", "--dwell", "0.005"]
+        }
+      ]
+    }
+  ]
+}

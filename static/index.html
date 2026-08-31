@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>RF Control Panel</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <header><div><span class="eyebrow">LAB OPERATIONS</span><h1>RF Control Panel</h1></div><span id="connection" class="status idle">Connecting</span></header>
+  <main>
+    <section><div class="section-title"><div><span class="eyebrow">SCENARIOS</span><h2>Waveform operations</h2></div><p>Select a predefined hardware sequence.</p></div><div id="scenarios" class="grid"><div class="empty">Loading scenarios…</div></div></section>
+    <section class="run-panel">
+      <div class="section-title"><div><span class="eyebrow">ACTIVE RUN</span><h2 id="run-name">No scenario running</h2></div><button id="stop" class="danger" disabled>Stop output</button></div>
+      <div class="run-meta"><span id="run-state" class="status idle">Idle</span><span id="run-step">Ready</span><span id="run-time">—</span></div>
+      <pre id="logs" aria-live="polite">Waiting for a scenario…</pre>
+    </section>
+  </main>
+  <footer>Local control interface · Verify RF connections, attenuation, and authorization before transmitting.</footer>
+  <script src="/app.js"></script>
+</body>
+</html>

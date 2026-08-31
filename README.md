@@ -21,6 +21,21 @@ python3 server.py
 
 Edit `scenarios.json` to define a scenario and what commands and equipment are needed to run it.
 
+Hardware listed in a scenario appears in the connection status section. Configure its
+probe once in the top-level `hardware_checks` object. Supported probes are:
+
+```json
+"hardware_checks": {
+  "Signal Hound VSG60A": {"type": "signalhound"},
+  "Ettus X310": {"type": "command", "command": ["uhd_find_devices"]},
+  "Modem": {"type": "tcp", "host": "192.0.2.10", "port": 23},
+  "Quintech switch": {"type": "tcp", "host": "192.0.2.20", "port": 9100}
+}
+```
+
+The equipment name in `hardware_checks` must exactly match the name in a scenario.
+An unconfigured device is reported as such rather than assumed to be connected.
+
 ```json
 {
   "id": "lab-test",

@@ -1,4 +1,7 @@
 {
+  "hardware_checks": {
+    "Signal Hound VSG60A": {"type": "signalhound", "timeout": 5}
+  },
   "scenarios": [
     {
       "id": "vsg-chirp-1ghz",

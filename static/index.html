@@ -7,16 +7,33 @@
   <link rel="stylesheet" href="/style.css">
 </head>
 <body>
-  <header><div><span class="eyebrow">LAB OPERATIONS</span><h1>RF Control Panel</h1></div><span id="connection" class="status idle">Connecting</span></header>
+  <header class="site-header">
+    <div><h1>RF Control Panel</h1><p>Run and monitor RF test scenarios.</p></div>
+  </header>
   <main>
-    <section><div class="section-title"><div><span class="eyebrow">SCENARIOS</span><h2>Waveform operations</h2></div><p>Select a predefined hardware sequence.</p></div><div id="scenarios" class="grid"><div class="empty">Loading scenarios…</div></div></section>
-    <section class="run-panel">
-      <div class="section-title"><div><span class="eyebrow">ACTIVE RUN</span><h2 id="run-name">No scenario running</h2></div><button id="stop" class="danger" disabled>Stop output</button></div>
-      <div class="run-meta"><span id="run-state" class="status idle">Idle</span><span id="run-step">Ready</span><span id="run-time">—</span></div>
+    <section aria-labelledby="hardware-heading">
+      <div class="section-heading"><h2 id="hardware-heading">Hardware connections</h2><p>Equipment required by the loaded scenarios.</p></div>
+      <div id="hardware" class="hardware-list" aria-live="polite"><p class="notice">Checking hardware…</p></div>
+    </section>
+    <section aria-labelledby="scenarios-heading">
+      <div class="section-heading"><h2 id="scenarios-heading">Scenarios</h2><p>Choose a scenario to start its hardware sequence.</p></div>
+      <div id="scenarios" class="scenario-list"><p class="notice">Loading scenarios…</p></div>
+    </section>
+    <section class="run-panel" aria-labelledby="run-heading">
+      <div class="section-heading run-heading">
+        <div><h2 id="run-heading">Current run</h2><p id="run-name">No scenario running</p></div>
+        <button id="stop" class="danger" type="button" disabled>Stop output</button>
+      </div>
+      <dl class="run-details">
+        <div><dt>Status</dt><dd><span id="run-state" class="status idle">Idle</span></dd></div>
+        <div><dt>Current step</dt><dd id="run-step">Ready</dd></div>
+        <div><dt>Start time</dt><dd id="run-time">—</dd></div>
+      </dl>
+      <label for="logs">Run log</label>
       <pre id="logs" aria-live="polite">Waiting for a scenario…</pre>
     </section>
   </main>
-  <footer>Local control interface · Verify RF connections, attenuation, and authorization before transmitting.</footer>
+  <footer>Check RF connections, attenuation, and authorization before transmitting.</footer>
   <script src="/app.js"></script>
 </body>
 </html>

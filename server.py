@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
-"""Small, dependency-free RF scenario control panel."""
-
 from __future__ import annotations
 
 import argparse
 import json
 import os
 import signal
+import socket
 import subprocess
+import sys
 import threading
 import time
 import uuid
@@ -82,6 +82,7 @@ class Runner:
         self.catalog_path = catalog_path
         self.lock = threading.RLock()
         self.run: Run | None = None
+        self.hardware_cache: tuple[float, list[dict]] | None = None
 
     def catalog(self) -> dict[str, dict]:
         return load_catalog(self.catalog_path)
@@ -91,6 +92,69 @@ class Runner:
         for item in self.catalog().values():
             safe.append({key: item.get(key) for key in ("id", "name", "description", "equipment")})
         return safe
+
+    def hardware(self) -> list[dict]:
+        """Check each unique piece of equipment referenced by a scenario."""
+        now = time.monotonic()
+        with self.lock:
+            if self.hardware_cache and now - self.hardware_cache[0] < 5:
+                return self.hardware_cache[1]
+
+        with self.catalog_path.open(encoding="utf-8") as handle:
+            config = json.load(handle)
+        checks = config.get("hardware_checks", {})
+        names = []
+        for scenario in config.get("scenarios", []):
+            for name in scenario.get("equipment", []):
+                if isinstance(name, str) and name not in names:
+                    names.append(name)
+
+        results = [self._check_hardware(name, checks.get(name)) for name in names]
+        with self.lock:
+            self.hardware_cache = (now, results)
+        return results
+
+    def _check_hardware(self, name: str, check: object) -> dict:
+        if not isinstance(check, dict):
+            return {"name": name, "state": "not_configured", "detail": "Check not configured"}
+        with self.lock:
+            if self.run and self.run.state in {"starting", "running", "stopping"}:
+                return {"name": name, "state": "in_use", "detail": "Connection check paused during active run"}
+        try:
+            check_type = check.get("type")
+            if check_type == "signalhound":
+                command = [
+                    sys.executable, "-c",
+                    "from vsgdevice.vsg_api import vsg_open_device,vsg_close_device; "
+                    "h=vsg_open_device()['handle']; vsg_close_device(h)",
+                ]
+                self._run_check(command, float(check.get("timeout", 5)))
+            elif check_type == "command":
+                command = check.get("command")
+                if not isinstance(command, list) or not command or not all(isinstance(v, str) for v in command):
+                    raise ValueError("invalid check command")
+                self._run_check(command, float(check.get("timeout", 5)))
+            elif check_type == "tcp":
+                host, port = check.get("host"), check.get("port")
+                if not isinstance(host, str) or not isinstance(port, int):
+                    raise ValueError("invalid TCP host or port")
+                with socket.create_connection((host, port), timeout=float(check.get("timeout", 3))):
+                    pass
+            else:
+                raise ValueError("unknown check type")
+            return {"name": name, "state": "connected", "detail": "Connected"}
+        except (OSError, subprocess.SubprocessError, ValueError) as exc:
+            detail = str(exc).strip() or "Connection check failed"
+            return {"name": name, "state": "disconnected", "detail": detail[:180]}
+
+    @staticmethod
+    def _run_check(command: list[str], timeout: float) -> None:
+        completed = subprocess.run(
+            command, cwd=ROOT, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+            text=True, timeout=timeout, check=False,
+        )
+        if completed.returncode:
+            raise OSError(completed.stdout.strip() or f"Exited with status {completed.returncode}")
 
     def status(self) -> dict | None:
         with self.lock:
@@ -219,6 +283,11 @@ class Handler(SimpleHTTPRequestHandler):
                 self._json({"error": str(exc)}, HTTPStatus.INTERNAL_SERVER_ERROR)
         elif path == "/api/status":
             self._json({"run": self.runner.status()})
+        elif path == "/api/hardware":
+            try:
+                self._json({"hardware": self.runner.hardware()})
+            except Exception as exc:
+                self._json({"error": str(exc)}, HTTPStatus.INTERNAL_SERVER_ERROR)
         else:
             super().do_GET()
 

@@ -2,12 +2,12 @@
 
 A small web control panel for running RF scenarios with control of the following:
 * SignalHound VGS60A
-* Quintech Switches
+* Quintech RF Switches
 * Modems
-* Ettus Radios
+* Ettus X310 Radio
+* Ettus X410 Radio
 
 ## Start
-
 
 ```bash
 chmod +x modem_control.sh

@@ -5,24 +5,6 @@
   },
   "scenarios": [
     {
-      "id": "vsg-chirp-1ghz",
-      "name": "Chirp sweep",
-      "description": "Triangular chirp with adjustable frequency, span, sample rate, and output level.",
-      "equipment": ["Signal Hound VSG60A"],
-      "arguments": [
-        {"id": "center", "label": "Center frequency", "type": "number", "default": 1000000000, "min": 50000000, "max": 6000000000, "step": 1000000, "unit": "Hz"},
-        {"id": "span", "label": "Span", "type": "number", "default": 20000000, "min": 1000000, "max": 40000000, "step": 1000000, "unit": "Hz"},
-        {"id": "sample_rate", "label": "Sample rate", "type": "number", "default": 50000000, "min": 1000000, "max": 100000000, "step": 1000000, "unit": "S/s"},
-        {"id": "level", "label": "Output level", "type": "number", "default": -20, "min": -60, "max": 20, "step": 1, "unit": "dBm"}
-      ],
-      "steps": [
-        {
-          "name": "Generate chirp",
-          "command": ["python3", "-u", "sweep.py", "--mode", "chirp", "--center", "{center}", "--span", "{span}", "--sample-rate", "{sample_rate}", "--level", "{level}", "--duration", "10"]
-        }
-      ]
-    },
-    {
       "id": "vsg-stepped-1ghz",
       "name": "Stepped sweep",
       "description": "201-point stepped sweep with adjustable frequency, span, sample rate, and output level.",

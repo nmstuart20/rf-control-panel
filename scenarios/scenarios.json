@@ -7,7 +7,7 @@
     {
       "id": "vsg-variable-power-cw",
       "name": "Variable-power CW",
-      "description": "Transmit a CW carrier whose power follows a bounded random walk over time.",
+      "description": "Random variable power cw waveform",
       "equipment": ["Signal Hound VSG60A"],
       "arguments": [
         {"id": "frequency", "label": "Carrier frequency", "type": "number", "default": 1000000000, "min": 30000000, "max": 6000000000, "step": 1000000, "unit": "Hz"},
@@ -25,9 +25,9 @@
       ]
     },
     {
-      "id": "vsg-stepped-1ghz",
+      "id": "vsg-stepped",
       "name": "Stepped sweep",
-      "description": "201-point stepped sweep with adjustable frequency, span, sample rate, and output level.",
+      "description": "Stepped sweep with adjustable frequency, span, sample rate, and output level.",
       "equipment": ["Signal Hound VSG60A"],
       "arguments": [
         {"id": "center", "label": "Center frequency", "type": "number", "default": 1000000000, "min": 50000000, "max": 6000000000, "step": 1000000, "unit": "Hz"},

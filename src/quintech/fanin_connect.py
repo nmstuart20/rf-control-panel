@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Connect fan-in input 1 to output 1 on a Quintech XTREME 32."""
+"""Connect a fan-in output to multiple inputs"""
 
 from __future__ import annotations
 
@@ -12,6 +12,7 @@ import ssl
 import sys
 import urllib.error
 import urllib.request
+from collections.abc import Sequence
 
 
 class QuintechError(RuntimeError):
@@ -107,28 +108,74 @@ def connect_crosspoint(
     verify_tls: bool,
     username: str,
     password: str,
+    output_number: int,
+    input_numbers: Sequence[int],
 ) -> None:
     client = QuintechWebClient(host, timeout, verify_tls)
     client.authenticate(username, password)
     print(f"HTTPS connection and authentication verified for {host}")
 
-    # The web API is zero-based: physical input/output 1 use index 0.
-    client.set_fanin_crosspoint(input_index=0, output_index=0)
+    # CLI port numbers are one-based, while the web API uses zero-based indexes.
+    # On the FanIn matrix, the API coordinates are reversed relative to the
+    # physical RF labels: API input is the physical output, and API output is
+    # the physical input.
+    output_index = output_number - 1
+    input_indexes = [input_number - 1 for input_number in input_numbers]
+    for input_index in input_indexes:
+        client.set_fanin_crosspoint(
+            input_index=output_index, output_index=input_index
+        )
 
     crosspoints = client.get_fanin_crosspoints()
-    if not crosspoints or not isinstance(crosspoints[0], dict):
-        raise QuintechError("fan-in output 1 was absent from the read-back")
-    if crosspoints[0].get("input") != 0:
-        actual = crosspoints[0].get("input")
-        raise QuintechError(
-            f"read-back failed: output 1 reports input index {actual!r}"
+    missing: list[int] = []
+    for input_number, input_index in zip(input_numbers, input_indexes):
+        verified = any(
+            isinstance(crosspoint, dict)
+            and crosspoint.get("input") == output_index
+            and crosspoint.get("output") == input_index
+            for crosspoint in crosspoints
         )
-    print("Connected fan-in input 1 to fan-in output 1 (read-back verified)")
+
+        # The switch normally returns one item per API output, with the output
+        # index implied by its position in the list.
+        if input_index < len(crosspoints) and isinstance(
+            crosspoints[input_index], dict
+        ):
+            selected = crosspoints[input_index].get("input")
+            verified = verified or selected == output_index
+
+        if not verified:
+            missing.append(input_number)
+    if missing:
+        raise QuintechError(
+            f"read-back failed: output {output_number} does not report "
+            f"input(s) {', '.join(map(str, missing))}"
+        )
+    input_list = ", ".join(map(str, input_numbers))
+    print(
+        f"Connected fan-in output {output_number} to input(s) "
+        f"{input_list}"
+    )
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Connect input 1 to output 1 on the XTREME 32 fan-in matrix."
+        description="Connect one output to one or more inputs on the XTREME 32 fan-in matrix."
+    )
+    parser.add_argument(
+        "output",
+        type=int,
+        choices=range(1, 9),
+        metavar="OUTPUT",
+        help="physical fan-in output number (1-32)",
+    )
+    parser.add_argument(
+        "inputs",
+        type=int,
+        choices=range(1, 9),
+        nargs="+",
+        metavar="INPUT",
+        help="one or more physical fan-in input numbers (1-32)",
     )
     parser.add_argument("--host", default="192.168.0.248")
     parser.add_argument("--username", default="Admin")
@@ -153,7 +200,13 @@ def main() -> int:
         password = getpass.getpass(f"Password for {args.username}@{args.host}: ")
     try:
         connect_crosspoint(
-            args.host, args.timeout, args.verify_tls, args.username, password
+            args.host,
+            args.timeout,
+            args.verify_tls,
+            args.username,
+            password,
+            args.output,
+            args.inputs,
         )
     except (OSError, QuintechError) as exc:
         print(f"ERROR: {exc}", file=sys.stderr)

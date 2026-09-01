@@ -14,12 +14,12 @@ chmod +x modem_control.sh
 ```
 
 ```bash
-python3 server.py
+python3 src/server.py
 ```
 
 ## Configure scenarios
 
-Edit `scenarios.json` to define a scenario and what commands and equipment are needed to run it.
+Edit `scenarios/scenarios.json` to define a scenario and what commands and equipment are needed to run it.
 
 Hardware listed in a scenario appears in the connection status section. Configure its
 probe once in the top-level `hardware_checks` object. Current supported probes are:
@@ -43,7 +43,7 @@ command value to substitute the validated input:
   {"id": "center", "label": "Center frequency", "type": "number", "default": 1000000000, "min": 50000000, "max": 6000000000, "step": 1000000, "unit": "Hz"}
 ],
 "steps": [
-  {"name": "Transmit", "command": ["python3", "sweep.py", "--center", "{center}"]}
+  {"name": "Transmit", "command": ["python3", "-m", "src.signalhound.sweep", "--center", "{center}"]}
 ]
 ```
 
@@ -57,11 +57,9 @@ command value to substitute the validated input:
     {"name": "Select RF path", "command": ["./scripts/quintech.sh", "path-a"]},
     {"name": "Configure modem", "command": ["./scripts/modem.sh", "test-profile"]},
     {"name": "Configure X310", "command": ["python3", "-u", "scripts/x310_setup.py", "--profile", "test"]},
-    {"name": "Transmit", "command": ["python3", "-u", "sweep.py", "--mode", "chirp", "--duration", "10"]}
+    {"name": "Transmit", "command": ["python3", "-u", "-m", "src.signalhound.sweep", "--mode", "chirp", "--duration", "10"]}
   ]
 }
 ```
 
-Currently need to ensure the Signal Hound library can access the USB device (typically through the vendor's udev rules), and run the panel from this directory so the provided library path resolves correctly.
-
-Make sure `libvsg_api.so.1.2.1` and `vsg_api.py` are in the PATH if using SignalHound.the vsgdevice folder with `the vsgdevice folder with `
+When using Signal Hound, place `vsg_api.py` and `libvsg_api.so.1.2.1` in the project-root `vsgdevice/` directory.

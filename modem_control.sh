@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Placeholder modem controls for use by scenarios.json.
+# Placeholder modem controls for use by scenarios/scenarios.json.
 
 set -euo pipefail
 

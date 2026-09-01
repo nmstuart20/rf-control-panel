@@ -18,8 +18,8 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 
-ROOT = Path(__file__).resolve().parent
-STATIC = ROOT / "static"
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+STATIC = PROJECT_ROOT / "static"
 MAX_LOG_LINES = 2000
 
 
@@ -160,7 +160,7 @@ class Runner:
     @staticmethod
     def _run_check(command: list[str], timeout: float) -> None:
         completed = subprocess.run(
-            command, cwd=ROOT, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+            command, cwd=PROJECT_ROOT, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
             text=True, timeout=timeout, check=False,
         )
         if completed.returncode:
@@ -252,7 +252,7 @@ class Runner:
                 env.update({str(k): str(v) for k, v in step.get("environment", {}).items()})
                 process = subprocess.Popen(
                     step["command"],
-                    cwd=ROOT,
+                    cwd=PROJECT_ROOT,
                     env=env,
                     stdout=subprocess.PIPE,
                     stderr=subprocess.STDOUT,
@@ -353,7 +353,9 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="RF scenario control panel")
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8080)
-    parser.add_argument("--config", type=Path, default=ROOT / "scenarios.json")
+    parser.add_argument(
+        "--config", type=Path, default=PROJECT_ROOT / "scenarios" / "scenarios.json"
+    )
     args = parser.parse_args()
     runner = Runner(args.config.resolve())
     runner.catalog()  # fail early on an invalid catalog

@@ -33,7 +33,6 @@ async function loadScenarios() {
 function renderScenario() {
   const scenario = scenarioCatalog.find(item => item.id === scenarioSelect.value);
   scenarioArguments.replaceChildren();
-  document.querySelector('#scenario-description').textContent = scenario?.description || '';
   document.querySelector('#scenario-equipment').textContent = scenario?.equipment?.length ? `Uses: ${scenario.equipment.join(', ')}` : '';
   for (const argument of scenario?.arguments || []) {
     const field = document.createElement('div'); field.className = 'field';

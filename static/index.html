@@ -8,21 +8,21 @@
 </head>
 <body>
   <header class="site-header">
-    <div><h1>RF Control Panel</h1><p>Run and monitor RF test scenarios.</p></div>
+    <div><h1>RF Control Panel</h1></div>
   </header>
   <main>
     <section aria-labelledby="hardware-heading">
-      <div class="section-heading"><h2 id="hardware-heading">Hardware connections</h2><p>Equipment required by the loaded scenarios.</p></div>
+      <div class="section-heading"><h2 id="hardware-heading">Hardware connections</h2></div>
       <div id="hardware" class="hardware-list" aria-live="polite"><p class="notice">Checking hardware…</p></div>
     </section>
     <section aria-labelledby="scenarios-heading">
-      <div class="section-heading"><h2 id="scenarios-heading">Scenarios</h2><p>Choose a predefined scenario from the dropdown list</p></div>
+      <div class="section-heading"><h2 id="scenarios-heading">Scenarios</h2></div>
       <form id="scenario-form" class="scenario-form">
         <div class="field scenario-select">
           <label for="scenario-select">Scenario</label>
           <select id="scenario-select" disabled><option>Loading scenarios…</option></select>
         </div>
-        <div id="scenario-description" class="scenario-description"></div>
+        <div id="scenario-description" hidden></div>
         <div id="scenario-arguments" class="argument-grid"></div>
         <div class="scenario-actions">
           <span id="scenario-equipment" class="equipment"></span>

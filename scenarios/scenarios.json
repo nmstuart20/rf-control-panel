@@ -1,13 +1,13 @@
 {
   "hardware_checks": {
-    "Signal Hound VSG60A": {"type": "signalhound", "timeout": 5},
-    "Example modem": {"type": "tcp", "host": "192.0.2.10", "port": 80, "timeout": 3}
+    "Signal Hound VSG60A": {"type": "signalhound", "timeout": 10},
+    "Quintech switch": {"type": "tcp", "host": "192.168.0.248", "port": 443, "timeout": 10},
+    "Example modem": {"type": "tcp", "host": "192.0.2.10", "port": 80, "timeout": 10}
   },
   "scenarios": [
     {
       "id": "vsg-variable-power-cw",
       "name": "Variable-power CW",
-      "description": "Random variable power cw waveform",
       "equipment": ["Signal Hound VSG60A"],
       "arguments": [
         {"id": "frequency", "label": "Carrier frequency", "type": "number", "default": 1000000000, "min": 30000000, "max": 6000000000, "step": 1000000, "unit": "Hz"},
@@ -27,7 +27,6 @@
     {
       "id": "vsg-stepped",
       "name": "Stepped sweep",
-      "description": "Stepped sweep with adjustable frequency, span, sample rate, and output level.",
       "equipment": ["Signal Hound VSG60A"],
       "arguments": [
         {"id": "center", "label": "Center frequency", "type": "number", "default": 1000000000, "min": 50000000, "max": 6000000000, "step": 1000000, "unit": "Hz"},
@@ -43,9 +42,31 @@
       ]
     },
     {
+      "id": "dual-vsg-collision",
+      "name": "Two-signal collision",
+      "description": "Combine two CW signals from separate Signal Hound generators on Quintech fan-in output 1.",
+      "equipment": ["Signal Hound VSG60A", "Quintech switch"],
+      "arguments": [
+        {"id": "frequency_1", "label": "Signal 1 frequency", "type": "number", "default": 1000000000, "min": 30000000, "max": 6000000000, "step": 1000000, "unit": "Hz"},
+        {"id": "frequency_2", "label": "Signal 2 frequency", "type": "number", "default": 1010000000, "min": 30000000, "max": 6000000000, "step": 1000000, "unit": "Hz"},
+        {"id": "level_1", "label": "Signal 1 power", "type": "number", "default": -20, "min": -120, "max": 10, "step": 1, "unit": "dBm"},
+        {"id": "level_2", "label": "Signal 2 power", "type": "number", "default": -20, "min": -120, "max": 10, "step": 1, "unit": "dBm"},
+        {"id": "duration", "label": "Duration", "type": "number", "default": 30, "min": 1, "max": 3600, "step": 1, "unit": "s"}
+      ],
+      "steps": [
+        {
+          "name": "Connect fan-in output 1 to inputs 1 and 2",
+          "command": ["python3", "-u", "-m", "src.quintech.fanin_connect", "1", "1", "2"]
+        },
+        {
+          "name": "Transmit both colliding signals",
+          "command": ["python3", "-u", "-m", "src.signalhound.dual_cw", "--frequency-1", "{frequency_1}", "--frequency-2", "{frequency_2}", "--level-1", "{level_1}", "--level-2", "{level_2}", "--duration", "{duration}"]
+        }
+      ]
+    },
+    {
       "id": "example-modem-setup",
       "name": "Example modem setup",
-      "description": "Placeholder sequence that checks a modem, applies a test profile, and enables transmission.",
       "equipment": ["Example modem"],
       "steps": [
         {

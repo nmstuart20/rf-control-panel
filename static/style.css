@@ -29,7 +29,6 @@ main { display: grid; gap: 30px; padding: 28px 0 36px; }
 input, select { width: 100%; border: 1px solid #888; border-radius: 3px; background: #fff; color: var(--text); padding: 8px 9px; font: inherit; }
 input:focus, select:focus { outline: 3px solid #9cc8e8; outline-offset: 1px; }
 .scenario-select { max-width: 480px; }
-.scenario-description { margin: 14px 0; color: var(--muted); }
 .argument-grid { display: grid; grid-template-columns: repeat(2, minmax(180px, 1fr)); gap: 14px 20px; padding: 16px 0; border-top: 1px solid var(--border); }
 .input-with-unit { display: flex; align-items: stretch; }
 .input-with-unit input { border-radius: 3px 0 0 3px; }

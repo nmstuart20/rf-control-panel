@@ -13,10 +13,39 @@ import sys
 import urllib.error
 import urllib.request
 from collections.abc import Sequence
+from pathlib import Path
+
+
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 
 class QuintechError(RuntimeError):
     """Raised when the switch rejects a request or returns invalid data."""
+
+
+def dotenv_value(path: Path, name: str) -> str | None:
+    """Read one value from a simple dotenv file without changing the environment."""
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except FileNotFoundError:
+        return None
+
+    for raw_line in lines:
+        line = raw_line.strip()
+        if not line or line.startswith("#"):
+            continue
+        if line.startswith("export "):
+            line = line[7:].lstrip()
+        key, separator, value = line.partition("=")
+        if not separator or key.strip() != name:
+            continue
+        value = value.strip()
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in "\"'":
+            value = value[1:-1]
+        elif " #" in value:
+            value = value.split(" #", 1)[0].rstrip()
+        return value
+    return None
 
 
 class QuintechWebClient:
@@ -196,6 +225,8 @@ def parse_args() -> argparse.Namespace:
 def main() -> int:
     args = parse_args()
     password = os.environ.get(args.password_env)
+    if password is None:
+        password = dotenv_value(PROJECT_ROOT / ".env", args.password_env)
     if password is None:
         password = getpass.getpass(f"Password for {args.username}@{args.host}: ")
     try:

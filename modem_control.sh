@@ -16,24 +16,59 @@ set -euo pipefail
 
 MODEM_BASE_URL="${MODEM_BASE_URL:-http://10.0.1.154}"
 MODEM_CURL_TIMEOUT="${MODEM_CURL_TIMEOUT:-10}"
+MODEM_RESPONSE=""
 
 modem_request() {
     local endpoint="${1:?usage: modem_request ENDPOINT [KEY=VALUE ...]}"
     shift
 
-    curl --fail --show-error --silent \
-        --connect-timeout "$MODEM_CURL_TIMEOUT" \
-        --max-time "$MODEM_CURL_TIMEOUT" \
-        --get \
-        "${MODEM_BASE_URL%/}${endpoint}" \
-        "$@"
-    printf '\n'
+    MODEM_RESPONSE="$(
+        curl --fail --show-error --silent \
+            --connect-timeout "$MODEM_CURL_TIMEOUT" \
+            --max-time "$MODEM_CURL_TIMEOUT" \
+            --get \
+            "${MODEM_BASE_URL%/}${endpoint}" \
+            "$@"
+    )"
+}
+
+report_modem_result() {
+    local success_message="${1:?usage: report_modem_result SUCCESS_MESSAGE}"
+    local response_text
+
+    # The modem returns a complete HTML page for both reads and updates. Reduce
+    # it to visible text so that an error page is not mistaken for success.
+    response_text="$(
+        printf '%s' "$MODEM_RESPONSE" |
+            tr '\r\n' '  ' |
+            sed -E \
+                -e 's/<script[^>]*>.*<\/script>//Ig' \
+                -e 's/<style[^>]*>.*<\/style>//Ig' \
+                -e 's/<[^>]+>/ /g' \
+                -e 's/&nbsp;/ /Ig' \
+                -e 's/&amp;/\&/Ig' \
+                -e 's/[[:space:]]+/ /g' \
+                -e 's/^ //; s/ $//'
+    )"
+
+    if [[ -z "$response_text" ]]; then
+        printf 'Modem returned an empty response.\n' >&2
+        return 1
+    fi
+
+    if [[ "${response_text,,}" =~ (^|[^[:alnum:]_])(error|failed|failure|invalid)([^[:alnum:]_]|$) ]]; then
+        printf 'Modem command failed: %s\n' "$response_text" >&2
+        return 1
+    fi
+
+    printf '%s\n' "$success_message"
 }
 
 modem_status() {
     # The comments document no status API; fetch the modem's web UI to verify
     # that it is reachable.
     modem_request "/"
+    report_modem_result "status OK"
 }
 
 modem_set_profile() {
@@ -59,6 +94,7 @@ modem_set_profile() {
         --data-urlencode "di=0" \
         --data-urlencode "dk=1" \
         --data-urlencode "tf=Apply"
+    report_modem_result "profile successful"
 }
 
 split_tx_level() {
@@ -88,6 +124,7 @@ modem_enable_transmit() {
         --data-urlencode "db=$TX_LEVEL_WHOLE" \
         --data-urlencode "dc=$TX_LEVEL_FRACTION" \
         --data-urlencode "tf=Apply"
+    report_modem_result "transmit successful"
 }
 
 modem_disable_transmit() {
@@ -99,6 +136,7 @@ modem_disable_transmit() {
         --data-urlencode "db=$TX_LEVEL_WHOLE" \
         --data-urlencode "dc=$TX_LEVEL_FRACTION" \
         --data-urlencode "tf=Apply"
+    report_modem_result "transmit disabled successfully"
 }
 
 usage() {

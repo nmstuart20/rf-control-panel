@@ -2,7 +2,7 @@
   "hardware_checks": {
     "Signal Hound VSG60A": {"type": "signalhound", "timeout": 10},
     "Quintech switch": {"type": "tcp", "host": "192.168.0.248", "port": 443, "timeout": 10},
-    "Example modem": {"type": "tcp", "host": "192.0.2.10", "port": 80, "timeout": 10}
+    "Comtech modem": {"type": "command", "command": ["./modem_control.sh", "status"], "timeout": 10}
   },
   "scenarios": [
     {
@@ -65,13 +65,17 @@
       ]
     },
     {
-      "id": "example-modem-setup",
-      "name": "Example modem setup",
-      "equipment": ["Example modem"],
+      "id": "modem-signal-transmit",
+      "name": "Modem signal transmit",
+      "equipment": ["Comtech modem", "Quintech switch"],
       "steps": [
         {
           "name": "Check modem status",
           "command": ["./modem_control.sh", "status"]
+        },
+        {
+          "name": "Connect fan-in output 1 to input 1",
+          "command": ["python3", "-u", "-m", "src.quintech.fanin_connect", "1", "1"]
         },
         {
           "name": "Apply test profile",
@@ -79,7 +83,7 @@
         },
         {
           "name": "Enable modem transmitter",
-          "command": ["./modem_control.sh", "enable-transmit", "19.0"]
+          "command": ["./modem_control.sh", "enable-transmit", "20.0"]
         }
       ]
     }

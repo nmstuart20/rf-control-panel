@@ -75,11 +75,11 @@
         },
         {
           "name": "Apply test profile",
-          "command": ["./modem_control.sh", "set-profile", "lab-test"]
+          "command": ["./modem_control.sh", "set-profile", "960000", "1"]
         },
         {
           "name": "Enable modem transmitter",
-          "command": ["./modem_control.sh", "enable-transmit"]
+          "command": ["./modem_control.sh", "enable-transmit", "19.0"]
         }
       ]
     }

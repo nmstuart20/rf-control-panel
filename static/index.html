@@ -18,60 +18,64 @@
 
     <p id="catalog-error" class="banner error" role="alert" hidden></p>
 
-    <section class="section" aria-labelledby="scenario-heading">
-      <h2 id="scenario-heading">Scenario</h2>
-      <div id="scenario-list" class="scenario-list" role="group" aria-labelledby="scenario-heading">
-        <p class="subtle">Loading scenarios…</p>
-      </div>
-    </section>
-
-    <section class="section" id="config" hidden>
-      <h2 id="config-name">Scenario</h2>
-      <p id="config-description" class="subtle" hidden></p>
-
-      <h3 class="minor">Required hardware</h3>
-      <ul id="config-hardware" class="hardware"></ul>
-
-      <form id="scenario-form">
-        <h3 class="minor" id="parameters-heading">Parameters</h3>
-        <div id="scenario-arguments" class="fields"></div>
-        <p id="run-error" class="banner error" role="alert" hidden></p>
-        <div class="actions">
-          <button type="submit" id="run-scenario" class="btn primary">
-            <span class="glyph" aria-hidden="true">▶</span>Run scenario
-          </button>
+    <div class="workspace">
+      <aside class="scenario-panel" aria-labelledby="scenario-heading">
+        <h2 id="scenario-heading">Scenarios</h2>
+        <div id="scenario-list" class="scenario-list" role="radiogroup" aria-labelledby="scenario-heading">
+          <p class="subtle">Loading scenarios…</p>
         </div>
-      </form>
-    </section>
+      </aside>
 
-    <section class="section" aria-labelledby="run-heading">
-      <div class="row">
-        <h2 id="run-heading">Current run</h2>
-        <span id="run-state" class="state idle" aria-live="polite">Idle</span>
-      </div>
-      <p id="run-name" class="run-name" aria-live="polite">No scenario has been run yet.</p>
+      <main class="workspace-content">
+        <section class="section" id="config" hidden>
+          <h2 id="config-name">Scenario</h2>
+          <p id="config-description" class="subtle" hidden></p>
 
-      <ol id="run-steps" class="steps" hidden></ol>
+          <h3 class="minor">Required hardware</h3>
+          <ul id="config-hardware" class="hardware"></ul>
 
-      <dl id="run-meta" class="meta" hidden>
-        <div><dt>Started</dt><dd id="run-started">—</dd></div>
-        <div><dt id="run-elapsed-label">Elapsed</dt><dd id="run-elapsed">—</dd></div>
-        <div id="run-exit-field" hidden><dt>Exit code</dt><dd id="run-exit">—</dd></div>
-      </dl>
+          <form id="scenario-form">
+            <h3 class="minor" id="parameters-heading">Parameters</h3>
+            <div id="scenario-arguments" class="fields"></div>
+            <p id="run-error" class="banner error" role="alert" hidden></p>
+            <div class="actions">
+              <button type="submit" id="run-scenario" class="btn primary">
+                <span class="glyph" aria-hidden="true">▶</span>Run scenario
+              </button>
+            </div>
+          </form>
+        </section>
 
-      <div class="row output-row">
-        <h3 class="minor">Output</h3>
-        <button type="button" id="clear-logs" class="btn small">Clear display</button>
-      </div>
-      <div id="logs" class="logs" tabindex="0" role="region" aria-label="Run output">
-        <p id="log-empty" class="log-empty">No output yet.</p>
-      </div>
+        <section class="section" aria-labelledby="run-heading">
+          <div class="row">
+            <h2 id="run-heading">Current run</h2>
+            <span id="run-state" class="state idle" aria-live="polite">Idle</span>
+          </div>
+          <p id="run-name" class="run-name" aria-live="polite">No scenario has been run yet.</p>
 
-      <p id="stop-error" class="banner error" role="alert" hidden></p>
-      <div class="actions">
-        <button type="button" id="stop" class="btn danger" disabled>Stop scenario</button>
-      </div>
-    </section>
+          <ol id="run-steps" class="steps" hidden></ol>
+
+          <dl id="run-meta" class="meta" hidden>
+            <div><dt>Started</dt><dd id="run-started">—</dd></div>
+            <div><dt id="run-elapsed-label">Elapsed</dt><dd id="run-elapsed">—</dd></div>
+            <div id="run-exit-field" hidden><dt>Exit code</dt><dd id="run-exit">—</dd></div>
+          </dl>
+
+          <div class="row output-row">
+            <h3 class="minor">Output</h3>
+            <button type="button" id="clear-logs" class="btn small">Clear display</button>
+          </div>
+          <div id="logs" class="logs" tabindex="0" role="region" aria-label="Run output">
+            <p id="log-empty" class="log-empty">No output yet.</p>
+          </div>
+
+          <p id="stop-error" class="banner error" role="alert" hidden></p>
+          <div class="actions">
+            <button type="button" id="stop" class="btn danger" disabled>Stop scenario</button>
+          </div>
+        </section>
+      </main>
+    </div>
 
     <footer>Check RF connections, attenuation, and authorization before transmitting.</footer>
   </div>

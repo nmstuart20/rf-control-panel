@@ -101,13 +101,6 @@ function renderScenarioList() {
     name.textContent = scenario.name || scenario.id;
 
     option.append(input, name);
-    const meta = scenario.description || (scenario.equipment || []).join(', ');
-    if (meta) {
-      const note = document.createElement('span');
-      note.className = 'scenario-option-meta';
-      note.textContent = meta;
-      option.append(note);
-    }
     scenarioList.append(option);
   }
 }
@@ -195,7 +188,7 @@ function renderRangeStatus() {
   if (count('in_use')) return setState(node, 'idle', 'Checks paused during run');
   if (count('disconnected')) return setState(node, 'bad', `${count('disconnected')} of ${items.length} disconnected`);
   if (count('not_configured')) return setState(node, 'warn', `${count('not_configured')} of ${items.length} not configured`);
-  setState(node, 'ok', 'Range ready');
+  setState(node, 'ok', 'All devices ready');
 }
 
 function renderScenarioHardware() {

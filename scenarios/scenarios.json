@@ -131,6 +131,11 @@
           "command": ["./modem_control.sh", "http://10.0.1.154", "set-profile", "{frequency}", "1"]
         },
         {
+          "name": "Verify Quintech RF levels",
+          "background": true,
+          "command": ["python3", "-u", "-m", "src.quintech.fanin_connect", "1", "1", "--check-rf-only","--level-settle-seconds", "5" ,"--level-tolerance", "10","--expected-input-levels", "{level}"]
+        },
+        {
           "name": "Enable modem transmitter",
           "command": ["./modem_control.sh", "http://10.0.1.154", "enable-transmit", "{level}"]
         },

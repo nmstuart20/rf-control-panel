@@ -20,6 +20,10 @@
       ],
       "steps": [
         {
+          "name": "Connect fan-in output 1 to input 3",
+          "command": ["python3", "-u", "-m", "src.quintech.fanin_connect", "1", "3"]
+        },
+        {
           "name": "Transmit variable-power CW",
           "command": ["python3", "-u", "-m", "src.signalhound.variable_power", "--frequency", "{frequency}", "--min-level", "{min_level}", "--max-level", "{max_level}", "--max-step", "{max_step}", "--interval", "{interval}", "--duration", "{duration}"]
         }
@@ -36,6 +40,10 @@
         {"id": "level", "label": "Output level", "type": "number", "default": -20, "min": -60, "max": 20, "step": 1, "unit": "dBm"}
       ],
       "steps": [
+        {
+          "name": "Connect fan-in output 1 to input 3",
+          "command": ["python3", "-u", "-m", "src.quintech.fanin_connect", "1", "3"]
+        },
         {
           "name": "Generate stepped sweep",
           "command": ["python3", "-u", "-m", "src.signalhound.sweep", "--mode", "stepped", "--center", "{center}", "--span", "{span}", "--sample-rate", "{sample_rate}", "--level", "{level}", "--points", "201", "--dwell", "0.005"]
@@ -76,7 +84,7 @@
           "command": ["./modem_control.sh", "http://10.0.0.153", "enable-transmit", "{level_2}"]
         },
         {
-          "name": "Verify Quintech input and output RF levels",
+          "name": "Verify Quintech RF levels",
           "command": ["python3", "-u", "-m", "src.quintech.fanin_connect", "1", "1", "2", "--check-rf-only","--expected-input-levels", "{level_1}", "{level_2}"]
         }
       ]

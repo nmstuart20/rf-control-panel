@@ -74,6 +74,10 @@
         {
           "name": "Transmit signal 2",
           "command": ["./modem_control.sh", "http://10.0.0.153", "enable-transmit", "{level_2}"]
+        },
+        {
+          "name": "Verify Quintech input and output RF levels",
+          "command": ["python3", "-u", "-m", "src.quintech.fanin_connect", "1", "1", "2", "--check-rf-only","--expected-input-levels", "{level_1}", "{level_2}"]
         }
       ]
     },

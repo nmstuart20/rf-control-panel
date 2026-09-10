@@ -23,6 +23,11 @@
           "name": "Connect fan-in output 1 to input 3",
           "command": ["python3", "-u", "-m", "src.quintech.fanin_connect", "1", "3", "--reset-existing"]
         },
+                {
+          "name": "Verify Quintech RF levels",
+          "background": true,
+          "command": ["python3", "-u", "-m", "src.quintech.fanin_connect", "1", "3", "--check-rf-only","--level-settle-seconds", "5" ,"--level-tolerance", "10","--expected-input-levels", "{level}"]
+        },
         {
           "name": "Transmit variable-power CW",
           "command": ["python3", "-u", "-m", "src.signalhound.variable_power", "--frequency", "{frequency}", "--min-level", "{min_level}", "--max-level", "{max_level}", "--max-step", "{max_step}", "--interval", "{interval}", "--duration", "{duration}"]
@@ -48,7 +53,7 @@
         {
           "name": "Verify Quintech RF levels",
           "background": true,
-          "command": ["python3", "-u", "-m", "src.quintech.fanin_connect", "1", "3", "--check-rf-only","--level-settle-seconds", "10" ,"--level-tolerance", "10","--expected-input-levels", "{level}"]
+          "command": ["python3", "-u", "-m", "src.quintech.fanin_connect", "1", "3", "--check-rf-only","--level-settle-seconds", "5" ,"--level-tolerance", "10","--expected-input-levels", "{level}"]
         },
         {
           "name": "Generate stepped sweep",
@@ -74,11 +79,11 @@
           "command": ["python3", "-u", "-m", "src.quintech.fanin_connect", "1", "1", "2", "--reset-existing"]
         },
         {
-          "name": "Apply profile 1",
+          "name": "Apply frequency profile to modem 1",
           "command": ["./modem_control.sh", "http://10.0.1.154", "set-profile", "{frequency_1}", "1"]
         },
         {
-          "name": "Apply profile 2",
+          "name": "Apply frequency profile to modem 2",
           "command": ["./modem_control.sh", "http://10.0.0.153", "set-profile", "{frequency_2}", "1"]
         },
         {
@@ -127,7 +132,7 @@
           "command": ["python3", "-u", "-m", "src.quintech.fanin_connect", "1", "1", "--reset-existing"]
         },
         {
-          "name": "Apply test profile",
+          "name": "Apply frequency profile",
           "command": ["./modem_control.sh", "http://10.0.1.154", "set-profile", "{frequency}", "1"]
         },
         {

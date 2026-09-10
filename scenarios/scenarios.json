@@ -23,10 +23,10 @@
           "name": "Connect fan-in output 1 to input 3",
           "command": ["python3", "-u", "-m", "src.quintech.fanin_connect", "1", "3", "--reset-existing"]
         },
-                {
+        {
           "name": "Verify Quintech RF levels",
           "background": true,
-          "command": ["python3", "-u", "-m", "src.quintech.fanin_connect", "1", "3", "--check-rf-only","--level-settle-seconds", "5" ,"--level-tolerance", "10","--expected-input-levels", "{level}"]
+          "command": ["python3", "-u", "-m", "src.quintech.fanin_connect", "1", "3", "--check-rf-only","--level-settle-seconds", "5" ,"--level-tolerance", "10","--expected-input-levels", "{min_level}"]
         },
         {
           "name": "Transmit variable-power CW",
@@ -111,6 +111,16 @@
           "name": "Disable signal 2 transmitter",
           "command": ["./modem_control.sh", "http://10.0.0.153", "disable-transmit", "{level_2}"]
         }
+      ],
+      "stop_steps": [
+        {
+          "name": "Disable signal 1 transmitter",
+          "command": ["./modem_control.sh", "http://10.0.1.154", "disable-transmit"]
+        },
+        {
+          "name": "Disable signal 2 transmitter",
+          "command": ["./modem_control.sh", "http://10.0.0.153", "disable-transmit"]
+        }
       ]
     },
     {
@@ -151,6 +161,12 @@
         {
           "name": "Disable modem transmitter",
           "command": ["./modem_control.sh", "http://10.0.1.154", "disable-transmit", "{level}"]
+        }
+      ],
+      "stop_steps": [
+        {
+          "name": "Disable modem transmitter",
+          "command": ["./modem_control.sh", "http://10.0.1.154", "disable-transmit"]
         }
       ]
     }

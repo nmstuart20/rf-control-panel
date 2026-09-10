@@ -48,7 +48,10 @@ def load_catalog(path: Path) -> dict[str, dict]:
         steps = item.get("steps")
         if not isinstance(steps, list) or not steps:
             raise ValueError(f"scenario {item['id']} needs at least one step")
-        for step in steps:
+        stop_steps = item.get("stop_steps", [])
+        if not isinstance(stop_steps, list):
+            raise ValueError(f"scenario {item['id']} has invalid stop steps")
+        for step in [*steps, *stop_steps]:
             command = step.get("command") if isinstance(step, dict) else None
             if not isinstance(command, list) or not command or not all(
                 isinstance(value, str) and value for value in command
@@ -185,11 +188,12 @@ class Runner:
             raise KeyError("unknown scenario")
         values = self._validate_arguments(scenario, supplied_arguments)
         prepared = dict(scenario)
-        prepared["steps"] = []
-        for step in scenario["steps"]:
-            prepared_step = dict(step)
-            prepared_step["command"] = [values.get(token[1:-1], token) if token.startswith("{") and token.endswith("}") else token for token in step["command"]]
-            prepared["steps"].append(prepared_step)
+        for key in ("steps", "stop_steps"):
+            prepared[key] = []
+            for step in scenario.get(key, []):
+                prepared_step = dict(step)
+                prepared_step["command"] = [values.get(token[1:-1], token) if token.startswith("{") and token.endswith("}") else token for token in step["command"]]
+                prepared[key].append(prepared_step)
         with self.lock:
             if self.run and self.run.state in {"starting", "running", "stopping"}:
                 raise RuntimeError("another scenario is already running")
@@ -252,7 +256,7 @@ class Runner:
 
     def _execute(self, run: Run, scenario: dict) -> None:
         with self.lock:
-            run.state = "running"
+            run.state = "stopping" if run.stop_requested else "running"
         self._log(run, f"Starting {run.scenario_name}")
         background: list[tuple[str, subprocess.Popen, threading.Thread]] = []
         try:
@@ -300,7 +304,7 @@ class Runner:
                 if code != 0 and not run.stop_requested:
                     raise RuntimeError(f"{name} exited with status {code}")
             with self.lock:
-                run.state = "stopped" if run.stop_requested else "completed"
+                run.state = "completed"
         except Exception as exc:
             self._log(run, f"ERROR: {exc}")
             self._terminate_processes(run)
@@ -308,12 +312,45 @@ class Runner:
                 run.state = "failed"
         finally:
             self._terminate_processes(run)
+            failed_before_cleanup = run.state == "failed"
+            if run.stop_requested or failed_before_cleanup:
+                try:
+                    self._execute_stop_steps(run, scenario.get("stop_steps", []))
+                    if not failed_before_cleanup:
+                        with self.lock:
+                            run.state = "stopped"
+                except Exception as exc:
+                    self._log(run, f"ERROR: cleanup command failed: {exc}")
+                    with self.lock:
+                        run.state = "failed"
             with self.lock:
                 run.current_step = None
                 run.process = None
                 run.processes.clear()
                 run.finished_at = time.time()
             self._log(run, f"Scenario {run.state}")
+
+    def _execute_stop_steps(self, run: Run, steps: list[dict]) -> None:
+        for index, step in enumerate(steps, start=1):
+            name = step.get("name", f"Stop step {index}")
+            with self.lock:
+                run.current_step = name
+            self._log(run, f"Cleanup step {index}: {name}")
+            env = os.environ.copy()
+            env.update({str(k): str(v) for k, v in step.get("environment", {}).items()})
+            process = subprocess.Popen(
+                step["command"], cwd=PROJECT_ROOT, env=env,
+                stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+                bufsize=1, start_new_session=True,
+            )
+            with self.lock:
+                run.process = process
+                run.processes.append(process)
+            self._read_output(run, process)
+            code = process.wait()
+            self._remove_process(run, process, code)
+            if code != 0:
+                raise RuntimeError(f"{name} exited with status {code}")
 
     def _read_output(self, run: Run, process: subprocess.Popen) -> None:
         assert process.stdout is not None

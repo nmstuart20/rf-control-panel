@@ -40,7 +40,7 @@ let stopPending = false;
 let logView = {runId: null, rendered: 0};
 let stepTracker = {runId: null, index: -1};
 let activeTab = 'scenarios';
-let rfSwitchUnlocked = false;
+let rfSwitchUnlocked = true;
 
 async function api(path, options = {}) {
   const response = await fetch(path, {headers: {'Content-Type': 'application/json'}, ...options});
@@ -103,10 +103,6 @@ function renderScenarioList() {
 }
 
 function selectTab(tab) {
-  if (tab === 'rf-switch' && !rfSwitchUnlocked) {
-    requestRfSwitchAccess();
-    return;
-  }
   activeTab = tab;
   const leftTab = tab === 'add-scenario' ? 'scenarios' : tab === 'add-hardware' ? 'hardware' : tab;
   for (const name of ['scenarios', 'hardware', 'rf-switch', 'add-scenario', 'add-hardware']) {

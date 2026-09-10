@@ -195,10 +195,6 @@ class Runner:
             return self.run.public() if self.run else None
 
     def unlock_rf_switch(self, password: object) -> str:
-        if not self.rf_switch_password:
-            raise RuntimeError("RF_SWITCH_PASSWORD is not configured")
-        if not isinstance(password, str) or not hmac.compare_digest(password, self.rf_switch_password):
-            raise PermissionError("invalid RF switch password")
         token = secrets.token_urlsafe(32)
         with self.lock:
             self.rf_switch_sessions.add(token)
@@ -362,10 +358,7 @@ class Handler(SimpleHTTPRequestHandler):
         return None
 
     def _rf_switch_required(self) -> bool:
-        if self.runner.rf_switch_unlocked(self._cookie("rf_switch_session")):
-            return True
-        self._json({"error": "RF switch config is locked"}, HTTPStatus.UNAUTHORIZED)
-        return False
+        return True
 
     def do_GET(self):
         path = urlparse(self.path).path
@@ -382,8 +375,7 @@ class Handler(SimpleHTTPRequestHandler):
             except Exception as exc:
                 self._json({"error": str(exc)}, HTTPStatus.INTERNAL_SERVER_ERROR)
         elif path == "/api/rf-switch":
-            if self._rf_switch_required():
-                self._json({"unlocked": True})
+            self._json({"unlocked": True})
         else:
             super().do_GET()
 

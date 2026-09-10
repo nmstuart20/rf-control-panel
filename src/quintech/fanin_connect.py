@@ -175,6 +175,10 @@ class QuintechWebClient:
         )
         self.check_command(result, "SetCrosspoint")
 
+    def clear_fanin_crosspoint(self, output_index: int) -> None:
+        """Disconnect one FanIn API output from its currently selected input."""
+        self.set_fanin_crosspoint(input_index=-1, output_index=output_index)
+
 
 def connect_crosspoint(
     host: str,
@@ -188,6 +192,7 @@ def connect_crosspoint(
     level_tolerance: float = 3.0,
     level_settle_seconds: float = 0.0,
     check_rf_only: bool = False,
+    reset_existing: bool = False,
 ) -> None:
     if expected_input_levels is not None and len(expected_input_levels) != len(
         input_numbers
@@ -219,36 +224,44 @@ def connect_crosspoint(
     # the physical input.
     output_index = output_number - 1
     input_indexes = [input_number - 1 for input_number in input_numbers]
-    for input_index in input_indexes:
+    connected_input_indexes = connected_inputs_for_output(
+        client.get_fanin_crosspoints(), output_index
+    )
+    if reset_existing:
+        for input_index in sorted(connected_input_indexes.difference(input_indexes)):
+            # SetCrosspoint assigns an API input to an API output; -1 is the
+            # disconnected input. FanIn's API coordinates are reversed, so
+            # this clears the physical input identified by input_index.
+            client.clear_fanin_crosspoint(output_index=input_index)
+
+    for input_index in sorted(set(input_indexes).difference(connected_input_indexes)):
         client.set_fanin_crosspoint(
             input_index=output_index, output_index=input_index
         )
 
     crosspoints = client.get_fanin_crosspoints()
+    connected_input_indexes = connected_inputs_for_output(
+        crosspoints, output_index
+    )
     missing: list[int] = []
     for input_number, input_index in zip(input_numbers, input_indexes):
-        verified = any(
-            isinstance(crosspoint, dict)
-            and crosspoint.get("input") == output_index
-            and crosspoint.get("output") == input_index
-            for crosspoint in crosspoints
-        )
-
-        # The switch normally returns one item per API output, with the output
-        # index implied by its position in the list.
-        if input_index < len(crosspoints) and isinstance(
-            crosspoints[input_index], dict
-        ):
-            selected = crosspoints[input_index].get("input")
-            verified = verified or selected == output_index
-
-        if not verified:
+        if input_index not in connected_input_indexes:
             missing.append(input_number)
     if missing:
         raise QuintechError(
             f"read-back failed: output {output_number} does not report "
             f"input(s) {', '.join(map(str, missing))}"
         )
+    if reset_existing:
+        unexpected = connected_input_indexes.difference(input_indexes)
+        if unexpected:
+            unexpected_numbers = ", ".join(
+                str(input_index + 1) for input_index in sorted(unexpected)
+            )
+            raise QuintechError(
+                f"read-back failed: output {output_number} still reports "
+                f"unexpected input(s) {unexpected_numbers}"
+            )
     input_list = ", ".join(map(str, input_numbers))
     print(
         f"Connected fan-in output {output_number} to input(s) "
@@ -264,6 +277,22 @@ def connect_crosspoint(
             level_tolerance,
             level_settle_seconds,
         )
+
+
+def connected_inputs_for_output(
+    crosspoints: Sequence[object], output_index: int
+) -> set[int]:
+    """Return API output indexes connected to one physical fan-in output."""
+    connected: set[int] = set()
+    for position, crosspoint in enumerate(crosspoints):
+        if not isinstance(crosspoint, dict):
+            continue
+        if crosspoint.get("input") != output_index:
+            continue
+        input_index = crosspoint.get("output", position)
+        if isinstance(input_index, int) and not isinstance(input_index, bool):
+            connected.add(input_index)
+    return connected
 
 
 def verify_rf_levels(
@@ -385,11 +414,19 @@ def parse_args() -> argparse.Namespace:
         help="check RF levels without changing or verifying fan-in crosspoints",
     )
     parser.add_argument(
+        "--reset-existing",
+        action="store_true",
+        help=(
+            "remove all existing connections to OUTPUT before connecting the "
+            "requested INPUTs"
+        ),
+    )
+    parser.add_argument(
         "--level-tolerance",
         type=float,
-        default=3.0,
+        default=5.0,
         metavar="DB",
-        help="maximum RF-level error (default: 3 dB)",
+        help="maximum RF-level error (default: 5 dB)",
     )
     parser.add_argument(
         "--level-settle-seconds",
@@ -403,6 +440,12 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> int:
     args = parse_args()
+    if args.check_rf_only and args.reset_existing:
+        print(
+            "ERROR: --reset-existing cannot be used with --check-rf-only",
+            file=sys.stderr,
+        )
+        return 2
     if args.level_tolerance < 0:
         print("ERROR: --level-tolerance must not be negative", file=sys.stderr)
         return 2
@@ -427,6 +470,7 @@ def main() -> int:
             args.level_tolerance,
             args.level_settle_seconds,
             args.check_rf_only,
+            args.reset_existing,
         )
     except (OSError, QuintechError) as exc:
         print(f"ERROR: {exc}", file=sys.stderr)

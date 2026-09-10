@@ -47,6 +47,17 @@ command value to substitute the validated input:
 ]
 ```
 
+Steps normally run one at a time. Set `"background": true` on a long-running
+step when the following step must execute while it is still active. Background
+steps continue streaming logs and must succeed before the scenario completes:
+
+```json
+"steps": [
+  {"name": "Transmit", "background": true, "command": ["./scripts/transmit.sh"]},
+  {"name": "Verify RF levels", "command": ["./scripts/verify-rf.sh"]}
+]
+```
+
 ```json
 {
   "id": "lab-test",

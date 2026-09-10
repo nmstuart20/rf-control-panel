@@ -21,7 +21,7 @@
       "steps": [
         {
           "name": "Connect fan-in output 1 to input 3",
-          "command": ["python3", "-u", "-m", "src.quintech.fanin_connect", "1", "3"]
+          "command": ["python3", "-u", "-m", "src.quintech.fanin_connect", "1", "3", "--reset-existing"]
         },
         {
           "name": "Transmit variable-power CW",
@@ -36,17 +36,23 @@
       "arguments": [
         {"id": "center", "label": "Center frequency", "type": "number", "default": 1000000000, "min": 50000000, "max": 6000000000, "step": 1000000, "unit": "Hz"},
         {"id": "span", "label": "Span", "type": "number", "default": 200000000, "min": 1000000, "max": 5950000000, "step": 1000000, "unit": "Hz"},
-        {"id": "sample_rate", "label": "Sample rate", "type": "number", "default": 50000000, "min": 1000000, "max": 100000000, "step": 1000000, "unit": "S/s"},
-        {"id": "level", "label": "Output level", "type": "number", "default": -20, "min": -60, "max": 20, "step": 1, "unit": "dBm"}
+        {"id": "sample_rate", "label": "Sample rate", "type": "number", "default": 50000000, "min": 1000000, "max": 54000000, "step": 1000000, "unit": "S/s"},
+        {"id": "level", "label": "Output level", "type": "number", "default": -20, "min": -60, "max": 10, "step": 1, "unit": "dBm"},
+        {"id": "duration", "label": "Duration", "type": "number", "default": 30, "min": 1, "max": 3600, "step": 1, "unit": "s"}
       ],
       "steps": [
         {
           "name": "Connect fan-in output 1 to input 3",
-          "command": ["python3", "-u", "-m", "src.quintech.fanin_connect", "1", "3"]
+          "command": ["python3", "-u", "-m", "src.quintech.fanin_connect", "1", "3", "--reset-existing"]
+        },
+        {
+          "name": "Verify Quintech RF levels",
+          "background": true,
+          "command": ["python3", "-u", "-m", "src.quintech.fanin_connect", "1", "3", "--check-rf-only","--level-settle-seconds", "10" ,"--level-tolerance", "10","--expected-input-levels", "{level}"]
         },
         {
           "name": "Generate stepped sweep",
-          "command": ["python3", "-u", "-m", "src.signalhound.sweep", "--mode", "stepped", "--center", "{center}", "--span", "{span}", "--sample-rate", "{sample_rate}", "--level", "{level}", "--points", "201", "--dwell", "0.005"]
+          "command": ["python3", "-u", "-m", "src.signalhound.sweep", "--mode", "stepped", "--center", "{center}", "--span", "{span}", "--sample-rate", "{sample_rate}", "--level", "{level}", "--duration", "{duration}", "--points", "201", "--dwell", "0.005"]
         }
       ]
     },
@@ -65,7 +71,7 @@
       "steps": [
         {
           "name": "Connect fan-in output 1 to inputs 1 and 2",
-          "command": ["python3", "-u", "-m", "src.quintech.fanin_connect", "1", "1", "2"]
+          "command": ["python3", "-u", "-m", "src.quintech.fanin_connect", "1", "1", "2", "--reset-existing"]
         },
         {
           "name": "Apply profile 1",
@@ -76,6 +82,11 @@
           "command": ["./modem_control.sh", "http://10.0.0.153", "set-profile", "{frequency_2}", "1"]
         },
         {
+          "name": "Verify Quintech RF levels",
+          "background": true,
+          "command": ["python3", "-u", "-m", "src.quintech.fanin_connect", "1", "1", "2", "--check-rf-only","--level-settle-seconds", "5" ,"--level-tolerance", "10","--expected-input-levels", "{level_1}", "{level_2}"]
+        },
+        {
           "name": "Transmit signal 1",
           "command": ["./modem_control.sh", "http://10.0.1.154", "enable-transmit", "{level_1}"]
         },
@@ -84,8 +95,16 @@
           "command": ["./modem_control.sh", "http://10.0.0.153", "enable-transmit", "{level_2}"]
         },
         {
-          "name": "Verify Quintech RF levels",
-          "command": ["python3", "-u", "-m", "src.quintech.fanin_connect", "1", "1", "2", "--check-rf-only","--expected-input-levels", "{level_1}", "{level_2}"]
+          "name": "Transmit for configured duration",
+          "command": ["sleep", "{duration}"]
+        },
+        {
+          "name": "Disable signal 1 transmitter",
+          "command": ["./modem_control.sh", "http://10.0.1.154", "disable-transmit", "{level_1}"]
+        },
+        {
+          "name": "Disable signal 2 transmitter",
+          "command": ["./modem_control.sh", "http://10.0.0.153", "disable-transmit", "{level_2}"]
         }
       ]
     },
@@ -95,7 +114,8 @@
       "equipment": ["Comtech modem 1", "Quintech switch"],
       "arguments":[
         {"id": "frequency", "label": "Signal frequency", "type": "number", "default": 960000000, "min": 950000000, "max": 32000000000, "step": 1000000, "unit": "Hz"},
-        {"id": "level", "label": "Signal power", "type": "number", "default": -30.0, "min": -120, "max": 10, "step": 1, "unit": "dBm"}
+        {"id": "level", "label": "Signal power", "type": "number", "default": -30.0, "min": -120, "max": 10, "step": 1, "unit": "dBm"},
+        {"id": "duration", "label": "Duration", "type": "number", "default": 30, "min": 1, "max": 3600, "step": 1, "unit": "s"}
       ],
       "steps": [
         {
@@ -104,7 +124,7 @@
         },
         {
           "name": "Connect fan-in output 1 to input 1",
-          "command": ["python3", "-u", "-m", "src.quintech.fanin_connect", "1", "1"]
+          "command": ["python3", "-u", "-m", "src.quintech.fanin_connect", "1", "1", "--reset-existing"]
         },
         {
           "name": "Apply test profile",
@@ -113,6 +133,14 @@
         {
           "name": "Enable modem transmitter",
           "command": ["./modem_control.sh", "http://10.0.1.154", "enable-transmit", "{level}"]
+        },
+        {
+          "name": "Transmit for configured duration",
+          "command": ["sleep", "{duration}"]
+        },
+        {
+          "name": "Disable modem transmitter",
+          "command": ["./modem_control.sh", "http://10.0.1.154", "disable-transmit", "{level}"]
         }
       ]
     }

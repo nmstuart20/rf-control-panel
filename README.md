@@ -17,6 +17,14 @@ chmod +x modem_control.sh
 python3 src/server.py
 ```
 
+To password-protect the RF switch config tab, set `RF_SWITCH_PASSWORD` before
+starting the server. The password is checked by the server and is never sent to
+the browser as configuration:
+
+```bash
+RF_SWITCH_PASSWORD='use-a-strong-password' python3 src/server.py
+```
+
 ## Configure scenarios
 
 Edit `scenarios/scenarios.json` to define a scenario and what commands and equipment are needed to run it.

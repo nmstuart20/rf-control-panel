@@ -48,10 +48,10 @@
       "equipment": ["Signal Hound VSG60A", "Quintech switch"],
       "arguments": [
         {"id": "frequency_1", "label": "Signal 1 frequency", "type": "number", "default": 1000000000, "min": 30000000, "max": 6000000000, "step": 1000000, "unit": "Hz"},
-        {"id": "frequency_2", "label": "Signal 2 frequency", "type": "number", "default": 1010000000, "min": 30000000, "max": 6000000000, "step": 1000000, "unit": "Hz"},
         {"id": "level_1", "label": "Signal 1 power", "type": "number", "default": -20, "min": -120, "max": 10, "step": 1, "unit": "dBm"},
-        {"id": "level_2", "label": "Signal 2 power", "type": "number", "default": -20, "min": -120, "max": 10, "step": 1, "unit": "dBm"},
-        {"id": "duration", "label": "Duration", "type": "number", "default": 30, "min": 1, "max": 3600, "step": 1, "unit": "s"}
+        {"id": "duration", "label": "Duration", "type": "number", "default": 30, "min": 1, "max": 3600, "step": 1, "unit": "s"},
+        {"id": "frequency_2", "label": "Signal 2 frequency", "type": "number", "default": 1010000000, "min": 30000000, "max": 6000000000, "step": 1000000, "unit": "Hz"},
+        {"id": "level_2", "label": "Signal 2 power", "type": "number", "default": -20, "min": -120, "max": 10, "step": 1, "unit": "dBm"}
       ],
       "steps": [
         {

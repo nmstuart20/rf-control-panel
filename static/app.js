@@ -22,6 +22,14 @@ const stopButton = el('stop');
 const logsBox = el('logs');
 const logEmpty = el('log-empty');
 const confirmDialog = el('confirm');
+const rfSwitchAuthDialog = el('rf-switch-auth');
+const scenarioPickerPanel = el('scenario-picker-panel');
+const addScenarioButton = el('add-scenario');
+const hardwarePickerPanel = el('hardware-picker-panel');
+const addHardwareButton = el('add-hardware');
+const newScenarioHardware = el('new-scenario-hardware');
+const addHardwareForm = el('add-hardware-form');
+const addHardwareSubmit = el('add-hardware-submit');
 
 let scenarios = [];
 let selectedId = null;
@@ -31,6 +39,8 @@ let locked = false;
 let stopPending = false;
 let logView = {runId: null, rendered: 0};
 let stepTracker = {runId: null, index: -1};
+let activeTab = 'scenarios';
+let rfSwitchUnlocked = false;
 
 async function api(path, options = {}) {
   const response = await fetch(path, {headers: {'Content-Type': 'application/json'}, ...options});
@@ -77,37 +87,73 @@ async function loadScenarios() {
 function renderScenarioList() {
   scenarioList.replaceChildren();
   if (!scenarios.length) {
-    const notice = document.createElement('p');
-    notice.className = 'subtle';
-    notice.textContent = 'No scenarios are defined in the scenario catalog.';
-    scenarioList.append(notice);
+    const option = document.createElement('option');
+    option.textContent = 'No scenarios are defined';
+    option.value = '';
+    scenarioList.append(option);
     return;
   }
   for (const scenario of scenarios) {
-    const option = document.createElement('label');
-    option.className = 'scenario-option';
-
-    const input = document.createElement('input');
-    input.type = 'radio';
-    input.name = 'scenario';
-    input.value = scenario.id;
-    input.className = 'sr-only';
-    input.checked = scenario.id === selectedId;
-    input.disabled = locked;
-    input.addEventListener('change', () => selectScenario(scenario.id));
-
-    const name = document.createElement('span');
-    name.className = 'scenario-option-name';
-    name.textContent = scenario.name || scenario.id;
-
-    option.append(input, name);
+    const option = document.createElement('option');
+    option.value = scenario.id;
+    option.textContent = scenario.name || scenario.id;
     scenarioList.append(option);
+  }
+  scenarioList.value = selectedId || scenarios[0].id;
+}
+
+function selectTab(tab) {
+  if (tab === 'rf-switch' && !rfSwitchUnlocked) {
+    requestRfSwitchAccess();
+    return;
+  }
+  activeTab = tab;
+  const leftTab = tab === 'add-scenario' ? 'scenarios' : tab === 'add-hardware' ? 'hardware' : tab;
+  for (const name of ['scenarios', 'hardware', 'rf-switch', 'add-scenario', 'add-hardware']) {
+    const button = el(`tab-${name}`);
+    const panel = el(`panel-${name}`);
+    const selected = name === tab;
+    if (button) {
+      const leftSelected = name === leftTab;
+      button.classList.toggle('active', leftSelected);
+      button.setAttribute('aria-selected', String(leftSelected));
+    }
+    panel.hidden = !selected;
+  }
+  el('run-section').hidden = tab !== 'scenarios';
+  scenarioPickerPanel.classList.toggle('is-visible', leftTab === 'scenarios');
+  scenarioPickerPanel.setAttribute('aria-hidden', String(leftTab !== 'scenarios'));
+  hardwarePickerPanel.classList.toggle('is-visible', leftTab === 'hardware');
+  hardwarePickerPanel.setAttribute('aria-hidden', String(leftTab !== 'hardware'));
+}
+
+async function requestRfSwitchAccess() {
+  if (rfSwitchAuthDialog.open) return;
+  clearError(el('rf-switch-auth-error'));
+  el('rf-switch-password').value = '';
+  rfSwitchAuthDialog.showModal();
+  el('rf-switch-password').focus();
+}
+
+async function unlockRfSwitch(event) {
+  event.preventDefault();
+  clearError(el('rf-switch-auth-error'));
+  try {
+    await api('/api/rf-switch/access', {
+      method: 'POST',
+      body: JSON.stringify({password: el('rf-switch-password').value}),
+    });
+    rfSwitchUnlocked = true;
+    rfSwitchAuthDialog.close();
+    selectTab('rf-switch');
+  } catch (error) {
+    showError(el('rf-switch-auth-error'), error.message);
   }
 }
 
 function selectScenario(id) {
   selectedId = id;
-  for (const input of scenarioList.querySelectorAll('input')) input.checked = input.value === id;
+  scenarioList.value = id || '';
   renderConfiguration();
 }
 
@@ -172,23 +218,11 @@ async function loadHardware() {
   try {
     const data = await api('/api/hardware');
     hardware = new Map((data.hardware || []).map(item => [item.name, item]));
-    renderRangeStatus();
   } catch (error) {
     hardware = new Map();
-    setState(el('range-status'), 'warn', `Hardware check failed: ${error.message}`);
   }
+  renderHardwareStatus();
   renderScenarioHardware();
-}
-
-function renderRangeStatus() {
-  const items = [...hardware.values()];
-  const node = el('range-status');
-  if (!items.length) return setState(node, 'idle', 'No hardware configured');
-  const count = state => items.filter(item => item.state === state).length;
-  if (count('in_use')) return setState(node, 'idle', 'Checks paused during run');
-  if (count('disconnected')) return setState(node, 'bad', `${count('disconnected')} of ${items.length} disconnected`);
-  if (count('not_configured')) return setState(node, 'warn', `${count('not_configured')} of ${items.length} not configured`);
-  setState(node, 'ok', 'All devices ready');
 }
 
 function renderScenarioHardware() {
@@ -214,13 +248,54 @@ function renderScenarioHardware() {
     setState(status, HARDWARE_TONES[state] || 'idle', HARDWARE_LABELS[state] || state);
 
     item.append(label, status);
-    if (check && check.state !== 'connected' && check.detail) {
-      const detail = document.createElement('span');
-      detail.className = 'detail';
-      detail.textContent = check.detail;
-      item.append(detail);
+    list.append(item);
+  }
+}
+
+function renderHardwareStatus() {
+  const list = el('hardware-status');
+  const items = [...hardware.values()];
+  list.replaceChildren();
+  renderHardwareOptions(items);
+  if (!items.length) {
+    const item = document.createElement('li');
+    item.className = 'detail';
+    item.textContent = 'No hardware configured.';
+    list.append(item);
+    return;
+  }
+  for (const check of items) {
+    const item = document.createElement('li');
+
+    const label = document.createElement('span');
+    label.textContent = check.name;
+
+    const status = document.createElement('span');
+    const state = check.state || 'unknown';
+    setState(status, HARDWARE_TONES[state] || 'idle', HARDWARE_LABELS[state] || state);
+
+    item.append(label, status);
+    if (/modem/i.test(check.name) && check.tx_state) {
+      const tx = document.createElement('span');
+      tx.className = `tx-status ${check.tx_state === 'on' ? 'on' : 'off'}`;
+      tx.textContent = `TX ${check.tx_state.toUpperCase()}`;
+      item.append(tx);
     }
     list.append(item);
+  }
+}
+
+function renderHardwareOptions(items) {
+  newScenarioHardware.replaceChildren();
+  const placeholder = document.createElement('option');
+  placeholder.value = '';
+  placeholder.textContent = items.length ? 'Select hardware' : 'No hardware available';
+  newScenarioHardware.append(placeholder);
+  for (const item of items) {
+    const option = document.createElement('option');
+    option.value = item.name;
+    option.textContent = item.name;
+    newScenarioHardware.append(option);
   }
 }
 
@@ -308,7 +383,7 @@ async function stopRun() {
 
 function setLocked(value) {
   locked = value;
-  for (const input of scenarioList.querySelectorAll('input')) input.disabled = value;
+  scenarioList.disabled = value;
   for (const input of scenarioArguments.querySelectorAll('input')) input.disabled = value;
   runButton.disabled = value || !selectedScenario();
 }
@@ -472,8 +547,25 @@ el('clear-logs').addEventListener('click', () => {
   logEmpty.hidden = false;
 });
 
+scenarioList.addEventListener('change', () => selectScenario(scenarioList.value || null));
+addScenarioButton.addEventListener('click', () => selectTab('add-scenario'));
+addHardwareButton.addEventListener('click', () => selectTab('add-hardware'));
+function updateAddHardwareButton() {
+  addHardwareSubmit.disabled = !addHardwareForm.checkValidity();
+}
+addHardwareForm.addEventListener('input', updateAddHardwareButton);
+addHardwareForm.addEventListener('change', updateAddHardwareButton);
+updateAddHardwareButton();
+
+for (const tab of ['scenarios', 'hardware', 'rf-switch']) {
+  el(`tab-${tab}`).addEventListener('click', () => selectTab(tab));
+}
+el('rf-switch-auth-form').addEventListener('submit', unlockRfSwitch);
+el('rf-switch-auth-cancel').addEventListener('click', () => rfSwitchAuthDialog.close());
+
 async function poll() {
   try {
+  el('run-section').hidden = tab !== 'scenarios';
     const data = await api('/api/status');
     renderRun(data.run);
   } catch (_) {

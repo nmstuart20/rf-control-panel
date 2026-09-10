@@ -2,9 +2,11 @@
 from __future__ import annotations
 
 import argparse
+import hmac
 import json
 import os
 import signal
+import secrets
 import socket
 import subprocess
 import sys
@@ -15,7 +17,7 @@ from dataclasses import dataclass, field
 from http import HTTPStatus
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import urlparse
+from urllib.parse import unquote, urlparse
 
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -93,6 +95,8 @@ class Runner:
         self.lock = threading.RLock()
         self.run: Run | None = None
         self.hardware_cache: tuple[float, list[dict]] | None = None
+        self.rf_switch_password = os.environ.get("RF_SWITCH_PASSWORD")
+        self.rf_switch_sessions: set[str] = set()
 
     def catalog(self) -> dict[str, dict]:
         return load_catalog(self.catalog_path)
@@ -136,6 +140,7 @@ class Runner:
         with self.lock:
             if self.run and self.run.state in {"starting", "running", "stopping"}:
                 return {"name": name, "state": "in_use", "detail": "Connection check paused during active run"}
+        tx_state = None
         try:
             check_type = check.get("type")
             if check_type == "signalhound":
@@ -149,7 +154,8 @@ class Runner:
                 command = check.get("command")
                 if not isinstance(command, list) or not command or not all(isinstance(v, str) for v in command):
                     raise ValueError("invalid check command")
-                self._run_check(command, float(check.get("timeout", 5)))
+                output = self._run_check(command, float(check.get("timeout", 5)))
+                tx_state = self._tx_state(output)
             elif check_type == "tcp":
                 host, port = check.get("host"), check.get("port")
                 if not isinstance(host, str) or not isinstance(port, int):
@@ -158,23 +164,49 @@ class Runner:
                     pass
             else:
                 raise ValueError("unknown check type")
-            return {"name": name, "state": "connected", "detail": "Connected"}
+            result = {"name": name, "state": "connected", "detail": "Connected"}
+            if tx_state is not None:
+                result["tx_state"] = tx_state
+            return result
         except (OSError, subprocess.SubprocessError, ValueError) as exc:
             detail = str(exc).strip() or "Connection check failed"
             return {"name": name, "state": "disconnected", "detail": detail[:180]}
 
     @staticmethod
-    def _run_check(command: list[str], timeout: float) -> None:
+    def _run_check(command: list[str], timeout: float) -> str:
         completed = subprocess.run(
             command, cwd=PROJECT_ROOT, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
             text=True, timeout=timeout, check=False,
         )
         if completed.returncode:
             raise OSError(completed.stdout.strip() or f"Exited with status {completed.returncode}")
+        return completed.stdout
+
+    @staticmethod
+    def _tx_state(output: str) -> str | None:
+        if "tx on" in output.lower():
+            return "on"
+        if "tx off" in output.lower():
+            return "off"
+        return None
 
     def status(self) -> dict | None:
         with self.lock:
             return self.run.public() if self.run else None
+
+    def unlock_rf_switch(self, password: object) -> str:
+        if not self.rf_switch_password:
+            raise RuntimeError("RF_SWITCH_PASSWORD is not configured")
+        if not isinstance(password, str) or not hmac.compare_digest(password, self.rf_switch_password):
+            raise PermissionError("invalid RF switch password")
+        token = secrets.token_urlsafe(32)
+        with self.lock:
+            self.rf_switch_sessions.add(token)
+        return token
+
+    def rf_switch_unlocked(self, token: str | None) -> bool:
+        with self.lock:
+            return bool(token and token in self.rf_switch_sessions)
 
     def start(self, scenario_id: str, supplied_arguments: object = None) -> dict:
         scenario = self.catalog().get(scenario_id)
@@ -301,12 +333,14 @@ class Handler(SimpleHTTPRequestHandler):
     def runner(self) -> Runner:
         return self.server.runner  # type: ignore[attr-defined]
 
-    def _json(self, value, status=HTTPStatus.OK):
+    def _json(self, value, status=HTTPStatus.OK, headers=None):
         data = json.dumps(value).encode()
         self.send_response(status)
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(data)))
         self.send_header("Cache-Control", "no-store")
+        for name, value in (headers or {}).items():
+            self.send_header(name, value)
         self.end_headers()
         self.wfile.write(data)
 
@@ -318,6 +352,20 @@ class Handler(SimpleHTTPRequestHandler):
             return json.loads(self.rfile.read(length) or b"{}")
         except (ValueError, json.JSONDecodeError) as exc:
             raise ValueError("invalid JSON body") from exc
+
+    def _cookie(self, name: str) -> str | None:
+        cookies = self.headers.get("Cookie", "").split(";")
+        for cookie in cookies:
+            key, separator, value = cookie.strip().partition("=")
+            if key == name and separator:
+                return unquote(value)
+        return None
+
+    def _rf_switch_required(self) -> bool:
+        if self.runner.rf_switch_unlocked(self._cookie("rf_switch_session")):
+            return True
+        self._json({"error": "RF switch config is locked"}, HTTPStatus.UNAUTHORIZED)
+        return False
 
     def do_GET(self):
         path = urlparse(self.path).path
@@ -333,6 +381,9 @@ class Handler(SimpleHTTPRequestHandler):
                 self._json({"hardware": self.runner.hardware()})
             except Exception as exc:
                 self._json({"error": str(exc)}, HTTPStatus.INTERNAL_SERVER_ERROR)
+        elif path == "/api/rf-switch":
+            if self._rf_switch_required():
+                self._json({"unlocked": True})
         else:
             super().do_GET()
 
@@ -344,8 +395,13 @@ class Handler(SimpleHTTPRequestHandler):
                 self._json({"run": self.runner.start(body.get("scenario_id"), body.get("arguments"))}, HTTPStatus.ACCEPTED)
             elif path == "/api/stop":
                 self._json({"run": self.runner.stop()}, HTTPStatus.ACCEPTED)
+            elif path == "/api/rf-switch/access":
+                token = self.runner.unlock_rf_switch(body.get("password"))
+                self._json({"unlocked": True}, HTTPStatus.OK, {"Set-Cookie": f"rf_switch_session={token}; HttpOnly; SameSite=Strict; Path=/api/rf-switch"})
             else:
                 self._json({"error": "not found"}, HTTPStatus.NOT_FOUND)
+        except PermissionError as exc:
+            self._json({"error": str(exc)}, HTTPStatus.UNAUTHORIZED)
         except KeyError as exc:
             self._json({"error": str(exc)}, HTTPStatus.NOT_FOUND)
         except (ValueError, RuntimeError) as exc:

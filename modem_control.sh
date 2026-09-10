@@ -65,10 +65,14 @@ report_modem_result() {
 }
 
 modem_status() {
-    # The comments document no status API; fetch the modem's web UI to verify
-    # that it is reachable.
+    # Fetch the modem's web UI to verify reachability and read the TX control.
     modem_request "/"
     report_modem_result "status OK"
+    if printf '%s' "$MODEM_RESPONSE" | grep -Eiq "dd[[:space:]]*=[[:space:]]*['\"]?1(['\"]?|[^0-9])"; then
+        printf 'tx on\n'
+    else
+        printf 'tx off\n'
+    fi
 }
 
 modem_set_profile() {

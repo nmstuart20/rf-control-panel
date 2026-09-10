@@ -2,7 +2,8 @@
   "hardware_checks": {
     "Signal Hound VSG60A": {"type": "signalhound", "timeout": 10},
     "Quintech switch": {"type": "tcp", "host": "192.168.0.248", "port": 443, "timeout": 10},
-    "Comtech modem": {"type": "command", "command": ["./modem_control.sh", "status"], "timeout": 10}
+    "Comtech modem 1": {"type": "command", "command": ["./modem_control.sh", "http://10.0.1.154", "status"], "timeout": 10},
+    "Comtech modem 2": {"type": "command", "command": ["./modem_control.sh", "http://10.0.0.153", "status"], "timeout": 10}
   },
   "scenarios": [
     {
@@ -19,6 +20,15 @@
       ],
       "steps": [
         {
+          "name": "Connect fan-in output 1 to input 3",
+          "command": ["python3", "-u", "-m", "src.quintech.fanin_connect", "1", "3", "--reset-existing"]
+        },
+        {
+          "name": "Verify Quintech RF levels",
+          "background": true,
+          "command": ["python3", "-u", "-m", "src.quintech.fanin_connect", "1", "3", "--check-rf-only","--level-settle-seconds", "5" ,"--level-tolerance", "10","--expected-input-levels", "{min_level}"]
+        },
+        {
           "name": "Transmit variable-power CW",
           "command": ["python3", "-u", "-m", "src.signalhound.variable_power", "--frequency", "{frequency}", "--min-level", "{min_level}", "--max-level", "{max_level}", "--max-step", "{max_step}", "--interval", "{interval}", "--duration", "{duration}"]
         }
@@ -31,59 +41,132 @@
       "arguments": [
         {"id": "center", "label": "Center frequency", "type": "number", "default": 1000000000, "min": 50000000, "max": 6000000000, "step": 1000000, "unit": "Hz"},
         {"id": "span", "label": "Span", "type": "number", "default": 200000000, "min": 1000000, "max": 5950000000, "step": 1000000, "unit": "Hz"},
-        {"id": "sample_rate", "label": "Sample rate", "type": "number", "default": 50000000, "min": 1000000, "max": 100000000, "step": 1000000, "unit": "S/s"},
-        {"id": "level", "label": "Output level", "type": "number", "default": -20, "min": -60, "max": 20, "step": 1, "unit": "dBm"}
+        {"id": "sample_rate", "label": "Sample rate", "type": "number", "default": 50000000, "min": 1000000, "max": 54000000, "step": 1000000, "unit": "S/s"},
+        {"id": "level", "label": "Output level", "type": "number", "default": -20, "min": -60, "max": 10, "step": 1, "unit": "dBm"},
+        {"id": "duration", "label": "Duration", "type": "number", "default": 30, "min": 1, "max": 3600, "step": 1, "unit": "s"}
       ],
       "steps": [
         {
+          "name": "Connect fan-in output 1 to input 3",
+          "command": ["python3", "-u", "-m", "src.quintech.fanin_connect", "1", "3", "--reset-existing"]
+        },
+        {
+          "name": "Verify Quintech RF levels",
+          "background": true,
+          "command": ["python3", "-u", "-m", "src.quintech.fanin_connect", "1", "3", "--check-rf-only","--level-settle-seconds", "5" ,"--level-tolerance", "10","--expected-input-levels", "{level}"]
+        },
+        {
           "name": "Generate stepped sweep",
-          "command": ["python3", "-u", "-m", "src.signalhound.sweep", "--mode", "stepped", "--center", "{center}", "--span", "{span}", "--sample-rate", "{sample_rate}", "--level", "{level}", "--points", "201", "--dwell", "0.005"]
+          "command": ["python3", "-u", "-m", "src.signalhound.sweep", "--mode", "stepped", "--center", "{center}", "--span", "{span}", "--sample-rate", "{sample_rate}", "--level", "{level}", "--duration", "{duration}", "--points", "201", "--dwell", "0.005"]
         }
       ]
     },
     {
-      "id": "dual-vsg-collision",
+      "id": "dual-signal-collision",
       "name": "Two-signal collision",
-      "description": "Combine two CW signals from separate Signal Hound generators on Quintech fan-in output 1.",
-      "equipment": ["Signal Hound VSG60A", "Quintech switch"],
+      "description": "Combine two signals from separate comtech switches on Quintech fan-in output 1.",
+      "equipment": ["Comtech modem 1","Comtech modem 2", "Quintech switch"],
       "arguments": [
-        {"id": "frequency_1", "label": "Signal 1 frequency", "type": "number", "default": 1000000000, "min": 30000000, "max": 6000000000, "step": 1000000, "unit": "Hz"},
-        {"id": "frequency_2", "label": "Signal 2 frequency", "type": "number", "default": 1010000000, "min": 30000000, "max": 6000000000, "step": 1000000, "unit": "Hz"},
-        {"id": "level_1", "label": "Signal 1 power", "type": "number", "default": -20, "min": -120, "max": 10, "step": 1, "unit": "dBm"},
-        {"id": "level_2", "label": "Signal 2 power", "type": "number", "default": -20, "min": -120, "max": 10, "step": 1, "unit": "dBm"},
+        {"id": "frequency_1", "label": "Signal 1 frequency", "type": "number", "default": 960000000, "min": 30000000, "max": 6000000000, "step": 1000000, "unit": "Hz"},
+        {"id": "frequency_2", "label": "Signal 2 frequency", "type": "number", "default": 960000000, "min": 30000000, "max": 6000000000, "step": 1000000, "unit": "Hz"},
+        {"id": "level_1", "label": "Signal 1 power", "type": "number", "default": -30.0, "min": -46, "max": -1, "step": 1, "unit": "dBm"},
+        {"id": "level_2", "label": "Signal 2 power", "type": "number", "default": -30.0, "min": -46, "max": -1, "step": 1, "unit": "dBm"},
         {"id": "duration", "label": "Duration", "type": "number", "default": 30, "min": 1, "max": 3600, "step": 1, "unit": "s"}
       ],
       "steps": [
         {
           "name": "Connect fan-in output 1 to inputs 1 and 2",
-          "command": ["python3", "-u", "-m", "src.quintech.fanin_connect", "1", "1", "2"]
+          "command": ["python3", "-u", "-m", "src.quintech.fanin_connect", "1", "1", "2", "--reset-existing"]
         },
         {
-          "name": "Transmit both colliding signals",
-          "command": ["python3", "-u", "-m", "src.signalhound.dual_cw", "--frequency-1", "{frequency_1}", "--frequency-2", "{frequency_2}", "--level-1", "{level_1}", "--level-2", "{level_2}", "--duration", "{duration}"]
+          "name": "Apply frequency profile to modem 1",
+          "command": ["./modem_control.sh", "http://10.0.1.154", "set-profile", "{frequency_1}", "1"]
+        },
+        {
+          "name": "Apply frequency profile to modem 2",
+          "command": ["./modem_control.sh", "http://10.0.0.153", "set-profile", "{frequency_2}", "1"]
+        },
+        {
+          "name": "Verify Quintech RF levels",
+          "background": true,
+          "command": ["python3", "-u", "-m", "src.quintech.fanin_connect", "1", "1", "2", "--check-rf-only","--level-settle-seconds", "5" ,"--level-tolerance", "10","--expected-input-levels", "{level_1}", "{level_2}"]
+        },
+        {
+          "name": "Transmit signal 1",
+          "command": ["./modem_control.sh", "http://10.0.1.154", "enable-transmit", "{level_1}"]
+        },
+        {
+          "name": "Transmit signal 2",
+          "command": ["./modem_control.sh", "http://10.0.0.153", "enable-transmit", "{level_2}"]
+        },
+        {
+          "name": "Transmit for configured duration",
+          "command": ["sleep", "{duration}"]
+        },
+        {
+          "name": "Disable signal 1 transmitter",
+          "command": ["./modem_control.sh", "http://10.0.1.154", "disable-transmit", "{level_1}"]
+        },
+        {
+          "name": "Disable signal 2 transmitter",
+          "command": ["./modem_control.sh", "http://10.0.0.153", "disable-transmit", "{level_2}"]
+        }
+      ],
+      "stop_steps": [
+        {
+          "name": "Disable signal 1 transmitter",
+          "command": ["./modem_control.sh", "http://10.0.1.154", "disable-transmit"]
+        },
+        {
+          "name": "Disable signal 2 transmitter",
+          "command": ["./modem_control.sh", "http://10.0.0.153", "disable-transmit"]
         }
       ]
     },
     {
       "id": "modem-signal-transmit",
       "name": "Modem signal transmit",
-      "equipment": ["Comtech modem", "Quintech switch"],
+      "equipment": ["Comtech modem 1", "Quintech switch"],
+      "arguments":[
+        {"id": "frequency", "label": "Signal frequency", "type": "number", "default": 960000000, "min": 950000000, "max": 32000000000, "step": 1000000, "unit": "Hz"},
+        {"id": "level", "label": "Signal power", "type": "number", "default": -30.0, "min": -120, "max": 10, "step": 1, "unit": "dBm"},
+        {"id": "duration", "label": "Duration", "type": "number", "default": 30, "min": 1, "max": 3600, "step": 1, "unit": "s"}
+      ],
       "steps": [
         {
           "name": "Check modem status",
-          "command": ["./modem_control.sh", "status"]
+          "command": ["./modem_control.sh", "http://10.0.1.154", "status"]
         },
         {
           "name": "Connect fan-in output 1 to input 1",
-          "command": ["python3", "-u", "-m", "src.quintech.fanin_connect", "1", "1"]
+          "command": ["python3", "-u", "-m", "src.quintech.fanin_connect", "1", "1", "--reset-existing"]
         },
         {
-          "name": "Apply test profile",
-          "command": ["./modem_control.sh", "set-profile", "960000", "1"]
+          "name": "Apply frequency profile",
+          "command": ["./modem_control.sh", "http://10.0.1.154", "set-profile", "{frequency}", "1"]
+        },
+        {
+          "name": "Verify Quintech RF levels",
+          "background": true,
+          "command": ["python3", "-u", "-m", "src.quintech.fanin_connect", "1", "1", "--check-rf-only","--level-settle-seconds", "5" ,"--level-tolerance", "10","--expected-input-levels", "{level}"]
         },
         {
           "name": "Enable modem transmitter",
-          "command": ["./modem_control.sh", "enable-transmit", "20.0"]
+          "command": ["./modem_control.sh", "http://10.0.1.154", "enable-transmit", "{level}"]
+        },
+        {
+          "name": "Transmit for configured duration",
+          "command": ["sleep", "{duration}"]
+        },
+        {
+          "name": "Disable modem transmitter",
+          "command": ["./modem_control.sh", "http://10.0.1.154", "disable-transmit", "{level}"]
+        }
+      ],
+      "stop_steps": [
+        {
+          "name": "Disable modem transmitter",
+          "command": ["./modem_control.sh", "http://10.0.1.154", "disable-transmit"]
         }
       ]
     }

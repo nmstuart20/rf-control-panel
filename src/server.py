@@ -48,12 +48,17 @@ def load_catalog(path: Path) -> dict[str, dict]:
         steps = item.get("steps")
         if not isinstance(steps, list) or not steps:
             raise ValueError(f"scenario {item['id']} needs at least one step")
-        for step in steps:
+        stop_steps = item.get("stop_steps", [])
+        if not isinstance(stop_steps, list):
+            raise ValueError(f"scenario {item['id']} has invalid stop steps")
+        for step in [*steps, *stop_steps]:
             command = step.get("command") if isinstance(step, dict) else None
             if not isinstance(command, list) or not command or not all(
                 isinstance(value, str) and value for value in command
             ):
                 raise ValueError(f"scenario {item['id']} has an invalid command")
+            if "background" in step and not isinstance(step["background"], bool):
+                raise ValueError(f"scenario {item['id']} has an invalid background flag")
         result[item["id"]] = item
     return result
 
@@ -71,6 +76,7 @@ class Run:
     stop_requested: bool = False
     logs: list[str] = field(default_factory=list)
     process: subprocess.Popen | None = field(default=None, repr=False)
+    processes: list[subprocess.Popen] = field(default_factory=list, repr=False)
 
     def public(self) -> dict:
         return {
@@ -182,11 +188,12 @@ class Runner:
             raise KeyError("unknown scenario")
         values = self._validate_arguments(scenario, supplied_arguments)
         prepared = dict(scenario)
-        prepared["steps"] = []
-        for step in scenario["steps"]:
-            prepared_step = dict(step)
-            prepared_step["command"] = [values.get(token[1:-1], token) if token.startswith("{") and token.endswith("}") else token for token in step["command"]]
-            prepared["steps"].append(prepared_step)
+        for key in ("steps", "stop_steps"):
+            prepared[key] = []
+            for step in scenario.get(key, []):
+                prepared_step = dict(step)
+                prepared_step["command"] = [values.get(token[1:-1], token) if token.startswith("{") and token.endswith("}") else token for token in step["command"]]
+                prepared[key].append(prepared_step)
         with self.lock:
             if self.run and self.run.state in {"starting", "running", "stopping"}:
                 raise RuntimeError("another scenario is already running")
@@ -218,7 +225,10 @@ class Runner:
                 raise ValueError(f"{item.get('label', argument_id)} must be at least {item['min']}")
             if "max" in item and value > item["max"]:
                 raise ValueError(f"{item.get('label', argument_id)} must be no more than {item['max']}")
-            values[argument_id] = str(value)
+            # Avoid adding a trailing ".0" to whole-valued numeric arguments.
+            # Command-line tools that require integers should receive the same
+            # representation the user entered in the number field.
+            values[argument_id] = str(int(value)) if isinstance(value, float) and value.is_integer() else str(value)
         return values
 
     def stop(self) -> dict:
@@ -228,8 +238,10 @@ class Runner:
                 raise RuntimeError("no scenario is running")
             run.stop_requested = True
             run.state = "stopping"
-            process = run.process
-        if process and process.poll() is None:
+            processes = list(run.processes)
+        for process in processes:
+            if process.poll() is not None:
+                continue
             try:
                 os.killpg(process.pid, signal.SIGTERM)
             except ProcessLookupError:
@@ -244,8 +256,9 @@ class Runner:
 
     def _execute(self, run: Run, scenario: dict) -> None:
         with self.lock:
-            run.state = "running"
+            run.state = "stopping" if run.stop_requested else "running"
         self._log(run, f"Starting {run.scenario_name}")
+        background: list[tuple[str, subprocess.Popen, threading.Thread]] = []
         try:
             for index, step in enumerate(scenario["steps"], start=1):
                 if run.stop_requested:
@@ -268,27 +281,109 @@ class Runner:
                 )
                 with self.lock:
                     run.process = process
+                    run.processes.append(process)
                 assert process.stdout is not None
-                for line in process.stdout:
-                    self._log(run, line)
+                if step.get("background", False):
+                    reader = threading.Thread(
+                        target=self._read_output, args=(run, process), daemon=True
+                    )
+                    reader.start()
+                    background.append((name, process, reader))
+                    self._log(run, f"{name} continues in background")
+                else:
+                    self._read_output(run, process)
+                    code = process.wait()
+                    self._remove_process(run, process, code)
+                    if code != 0 and not run.stop_requested:
+                        raise RuntimeError(f"{name} exited with status {code}")
+
+            for name, process, reader in background:
                 code = process.wait()
-                with self.lock:
-                    run.process = None
-                    run.exit_code = code
+                reader.join()
+                self._remove_process(run, process, code)
                 if code != 0 and not run.stop_requested:
                     raise RuntimeError(f"{name} exited with status {code}")
             with self.lock:
-                run.state = "stopped" if run.stop_requested else "completed"
+                run.state = "completed"
         except Exception as exc:
             self._log(run, f"ERROR: {exc}")
+            self._terminate_processes(run)
             with self.lock:
                 run.state = "failed"
         finally:
+            self._terminate_processes(run)
+            failed_before_cleanup = run.state == "failed"
+            if run.stop_requested or failed_before_cleanup:
+                try:
+                    self._execute_stop_steps(run, scenario.get("stop_steps", []))
+                    if not failed_before_cleanup:
+                        with self.lock:
+                            run.state = "stopped"
+                except Exception as exc:
+                    self._log(run, f"ERROR: cleanup command failed: {exc}")
+                    with self.lock:
+                        run.state = "failed"
             with self.lock:
                 run.current_step = None
                 run.process = None
+                run.processes.clear()
                 run.finished_at = time.time()
             self._log(run, f"Scenario {run.state}")
+
+    def _execute_stop_steps(self, run: Run, steps: list[dict]) -> None:
+        for index, step in enumerate(steps, start=1):
+            name = step.get("name", f"Stop step {index}")
+            with self.lock:
+                run.current_step = name
+            self._log(run, f"Cleanup step {index}: {name}")
+            env = os.environ.copy()
+            env.update({str(k): str(v) for k, v in step.get("environment", {}).items()})
+            process = subprocess.Popen(
+                step["command"], cwd=PROJECT_ROOT, env=env,
+                stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+                bufsize=1, start_new_session=True,
+            )
+            with self.lock:
+                run.process = process
+                run.processes.append(process)
+            self._read_output(run, process)
+            code = process.wait()
+            self._remove_process(run, process, code)
+            if code != 0:
+                raise RuntimeError(f"{name} exited with status {code}")
+
+    def _read_output(self, run: Run, process: subprocess.Popen) -> None:
+        assert process.stdout is not None
+        for line in process.stdout:
+            self._log(run, line)
+
+    def _remove_process(self, run: Run, process: subprocess.Popen, code: int) -> None:
+        with self.lock:
+            if process in run.processes:
+                run.processes.remove(process)
+            if run.process is process:
+                run.process = run.processes[-1] if run.processes else None
+            run.exit_code = code
+
+    def _terminate_processes(self, run: Run) -> None:
+        with self.lock:
+            processes = list(run.processes)
+        for process in processes:
+            if process.poll() is not None:
+                continue
+            try:
+                os.killpg(process.pid, signal.SIGTERM)
+            except ProcessLookupError:
+                pass
+        for process in processes:
+            try:
+                process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                try:
+                    os.killpg(process.pid, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
+                process.wait()
 
 
 class Handler(SimpleHTTPRequestHandler):

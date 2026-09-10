@@ -4,9 +4,9 @@
 set -euo pipefail
 
 
-# Base URL is the static IP of the modem (for example, http://10.0.1.154).
+# The first argument is the modem's base URL (for example, http://10.0.1.154).
 # To change frequency and mod type and other parameters http://10.0.1.154/cT3?da=2&db=960000&dc=1000&de=1&df=0&dh=0&di=0&dk=1&tf=Apply
-# db is the frequency, de is the number corresponding to some modtype (de = 1 is QPSK 1/4)
+# db is the frequency in kHz, de is the number corresponding to some modtype (de = 1 is QPSK 1/4)
 # To turn TX on and off and set power level http://10.0.1.154/cM3?da=2&dd=1&db=19&dc=0&tf=Apply
 # dd=1 means TX is on, dd omitted means TX is off
 # db is the whole number before the decimal
@@ -14,7 +14,7 @@ set -euo pipefail
 # TX level range (-dBm) 1.0-46.0
 # All commands are GET as far as I can tell
 
-MODEM_BASE_URL="${MODEM_BASE_URL:-http://10.0.1.154}"
+MODEM_BASE_URL=""
 MODEM_CURL_TIMEOUT="${MODEM_CURL_TIMEOUT:-10}"
 MODEM_RESPONSE=""
 
@@ -72,13 +72,19 @@ modem_status() {
 }
 
 modem_set_profile() {
-    local frequency="${1:?usage: modem_set_profile FREQUENCY MODULATION_TYPE}"
-    local modulation_type="${2:?usage: modem_set_profile FREQUENCY MODULATION_TYPE}"
+    local frequency_hz="${1:?usage: modem_set_profile FREQUENCY_HZ MODULATION_TYPE}"
+    local modulation_type="${2:?usage: modem_set_profile FREQUENCY_HZ MODULATION_TYPE}"
+    local frequency_khz
 
-    if [[ ! "$frequency" =~ ^[0-9]+$ ]] || (( 10#$frequency == 0 )); then
-        printf 'Frequency must be a positive whole number.\n' >&2
+    if [[ ! "$frequency_hz" =~ ^[0-9]+$ ]] || (( 10#$frequency_hz == 0 )); then
+        printf 'Frequency must be a positive whole number in Hz.\n' >&2
         return 2
     fi
+    if (( 10#$frequency_hz % 1000 != 0 )); then
+        printf 'Frequency must be divisible by 1000 Hz because the modem uses whole kHz.\n' >&2
+        return 2
+    fi
+    frequency_khz=$((10#$frequency_hz / 1000))
     if [[ ! "$modulation_type" =~ ^[0-9]+$ ]]; then
         printf 'Modulation type must be a non-negative whole number.\n' >&2
         return 2
@@ -86,7 +92,7 @@ modem_set_profile() {
 
     modem_request "/cT3" \
         --data-urlencode "da=2" \
-        --data-urlencode "db=$frequency" \
+        --data-urlencode "db=$frequency_khz" \
         --data-urlencode "dc=1000" \
         --data-urlencode "de=$modulation_type" \
         --data-urlencode "df=0" \
@@ -100,8 +106,11 @@ modem_set_profile() {
 split_tx_level() {
     local level="${1:?usage: split_tx_level LEVEL}"
 
-    if [[ ! "$level" =~ ^([0-9]+)(\.([0-9]))?$ ]]; then
-        printf 'TX level must have at most one decimal place.\n' >&2
+    # The web panel expresses power as signed dBm (for example, -30), while
+    # the modem expects the positive magnitude of its negative-dBm value.
+    # Continue accepting the legacy positive form as well.
+    if [[ ! "$level" =~ ^-?([0-9]+)(\.([0-9]))?$ ]]; then
+        printf 'TX level must be a number with at most one decimal place.\n' >&2
         return 2
     fi
 
@@ -109,7 +118,7 @@ split_tx_level() {
     TX_LEVEL_FRACTION="${BASH_REMATCH[3]:-0}"
     if (( TX_LEVEL_WHOLE < 1 || TX_LEVEL_WHOLE > 46 ||
           (TX_LEVEL_WHOLE == 46 && TX_LEVEL_FRACTION != 0) )); then
-        printf 'TX level must be between 1.0 and 46.0 -dBm.\n' >&2
+        printf 'TX level must be between -46.0 and -1.0 dBm (or a positive magnitude from 1.0 to 46.0).\n' >&2
         return 2
     fi
 }
@@ -140,12 +149,25 @@ modem_disable_transmit() {
 }
 
 usage() {
-    printf 'Usage: %s {status|set-profile FREQUENCY MODULATION_TYPE|enable-transmit [LEVEL]|disable-transmit [LEVEL]}\n' "$0" >&2
+    printf 'Usage: %s MODEM_BASE_URL {status|set-profile FREQUENCY_HZ MODULATION_TYPE|enable-transmit [LEVEL]|disable-transmit [LEVEL]}\n' "$0" >&2
 }
 
 main() {
-    local command="${1:-}"
-    shift || true
+    if (( $# < 2 )); then
+        usage
+        return 2
+    fi
+
+    MODEM_BASE_URL="${1:-}"
+    local command="${2:-}"
+
+    if [[ ! "$MODEM_BASE_URL" =~ ^https?://[^/[:space:]]+(/.*)?$ ]]; then
+        printf 'MODEM_BASE_URL must be a valid HTTP or HTTPS URL.\n' >&2
+        usage
+        return 2
+    fi
+
+    shift 2
 
     case "$command" in
         status) modem_status "$@" ;;

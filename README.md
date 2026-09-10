@@ -47,6 +47,31 @@ command value to substitute the validated input:
 ]
 ```
 
+Steps normally run one at a time. Set `"background": true` on a long-running
+step when the following step must execute while it is still active. Background
+steps continue streaming logs and must succeed before the scenario completes:
+
+```json
+"steps": [
+  {"name": "Transmit", "background": true, "command": ["./scripts/transmit.sh"]},
+  {"name": "Verify RF levels", "command": ["./scripts/verify-rf.sh"]}
+]
+```
+
+To run cleanup commands when the user clicks **Stop scenario** or when a regular
+step fails, add optional `stop_steps`. They run in order after active foreground
+and background processes have been terminated. Stop steps may use scenario
+argument placeholders and `environment` in the same way as regular steps:
+
+```json
+"stop_steps": [
+  {"name": "Disable transmitter", "command": ["./scripts/modem.sh", "disable", "{level}"]}
+]
+```
+
+Stop steps are not run when a scenario completes normally. A scenario remains
+failed after its cleanup commands run if one of its regular steps failed.
+
 ```json
 {
   "id": "lab-test",

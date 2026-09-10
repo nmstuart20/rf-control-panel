@@ -98,9 +98,15 @@ class Runner:
         return load_catalog(self.catalog_path)
 
     def scenarios(self) -> list[dict]:
+        """Scenario metadata for the panel. Step commands are never sent to the browser."""
         safe = []
         for item in self.catalog().values():
-            safe.append({key: item.get(key) for key in ("id", "name", "description", "equipment", "arguments")})
+            entry = {key: item.get(key) for key in ("id", "name", "description", "equipment", "arguments")}
+            entry["step_names"] = [
+                step.get("name", f"Step {index}")
+                for index, step in enumerate(item.get("steps", []), start=1)
+            ]
+            safe.append(entry)
         return safe
 
     def hardware(self) -> list[dict]:

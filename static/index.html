@@ -7,44 +7,93 @@
   <link rel="stylesheet" href="/style.css">
 </head>
 <body>
-  <header class="site-header">
-    <div><h1>RF Control Panel</h1></div>
-  </header>
-  <main>
-    <section aria-labelledby="hardware-heading">
-      <div class="section-heading"><h2 id="hardware-heading">Hardware connections</h2></div>
-      <div id="hardware" class="hardware-list" aria-live="polite"><p class="notice">Checking hardware…</p></div>
+  <div class="page">
+    <header class="page-header">
+      <div>
+        <h1>RF Control Panel</h1>
+        <p class="subtle">Run predefined RF scenarios and monitor execution.</p>
+      </div>
+      <p id="range-status" class="state idle" aria-live="polite">Checking hardware</p>
+    </header>
+
+    <p id="catalog-error" class="banner error" role="alert" hidden></p>
+
+    <section class="section" aria-labelledby="scenario-heading">
+      <h2 id="scenario-heading">Scenario</h2>
+      <div id="scenario-list" class="scenario-list" role="group" aria-labelledby="scenario-heading">
+        <p class="subtle">Loading scenarios…</p>
+      </div>
     </section>
-    <section aria-labelledby="scenarios-heading">
-      <div class="section-heading"><h2 id="scenarios-heading">Scenarios</h2></div>
-      <form id="scenario-form" class="scenario-form">
-        <div class="field scenario-select">
-          <label for="scenario-select">Scenario</label>
-          <select id="scenario-select" disabled><option>Loading scenarios…</option></select>
-        </div>
-        <div id="scenario-description" hidden></div>
-        <div id="scenario-arguments" class="argument-grid"></div>
-        <div class="scenario-actions">
-          <span id="scenario-equipment" class="equipment"></span>
-          <button id="run-scenario" type="submit" data-run disabled>Run scenario</button>
+
+    <section class="section" id="config" hidden>
+      <h2 id="config-name">Scenario</h2>
+      <p id="config-description" class="subtle" hidden></p>
+
+      <h3 class="minor">Required hardware</h3>
+      <ul id="config-hardware" class="hardware"></ul>
+
+      <form id="scenario-form">
+        <h3 class="minor" id="parameters-heading">Parameters</h3>
+        <div id="scenario-arguments" class="fields"></div>
+        <p id="run-error" class="banner error" role="alert" hidden></p>
+        <div class="actions">
+          <button type="submit" id="run-scenario" class="btn primary">
+            <span class="glyph" aria-hidden="true">▶</span>Run scenario
+          </button>
         </div>
       </form>
     </section>
-    <section class="run-panel" aria-labelledby="run-heading">
-      <div class="section-heading run-heading">
-        <div><h2 id="run-heading">Current run</h2><p id="run-name">No scenario running</p></div>
-        <button id="stop" class="danger" type="button" disabled>Stop output</button>
+
+    <section class="section" aria-labelledby="run-heading">
+      <div class="row">
+        <h2 id="run-heading">Current run</h2>
+        <span id="run-state" class="state idle" aria-live="polite">Idle</span>
       </div>
-      <dl class="run-details">
-        <div><dt>Status</dt><dd><span id="run-state" class="status idle">Idle</span></dd></div>
-        <div><dt>Current step</dt><dd id="run-step">Ready</dd></div>
-        <div><dt>Start time</dt><dd id="run-time">—</dd></div>
+      <p id="run-name" class="run-name" aria-live="polite">No scenario has been run yet.</p>
+
+      <ol id="run-steps" class="steps" hidden></ol>
+
+      <dl id="run-meta" class="meta" hidden>
+        <div><dt>Started</dt><dd id="run-started">—</dd></div>
+        <div><dt id="run-elapsed-label">Elapsed</dt><dd id="run-elapsed">—</dd></div>
+        <div id="run-exit-field" hidden><dt>Exit code</dt><dd id="run-exit">—</dd></div>
       </dl>
-      <label for="logs">Run log</label>
-      <pre id="logs" aria-live="polite">Waiting for a scenario…</pre>
+
+      <div class="row output-row">
+        <h3 class="minor">Output</h3>
+        <button type="button" id="clear-logs" class="btn small">Clear display</button>
+      </div>
+      <div id="logs" class="logs" tabindex="0" role="region" aria-label="Run output">
+        <p id="log-empty" class="log-empty">No output yet.</p>
+      </div>
+
+      <p id="stop-error" class="banner error" role="alert" hidden></p>
+      <div class="actions">
+        <button type="button" id="stop" class="btn danger" disabled>Stop scenario</button>
+      </div>
     </section>
-  </main>
-  <footer>Check RF connections, attenuation, and authorization before transmitting.</footer>
+
+    <footer>Check RF connections, attenuation, and authorization before transmitting.</footer>
+  </div>
+
+  <dialog id="confirm" class="dialog" aria-labelledby="confirm-title">
+    <form method="dialog">
+      <div class="dialog-header">
+        <h2 id="confirm-title">Run scenario?</h2>
+      </div>
+      <div class="dialog-body">
+        <dl id="confirm-params" class="confirm-params"></dl>
+        <h3 class="minor">Equipment</h3>
+        <ul id="confirm-equipment" class="plain-list"></ul>
+        <p class="subtle">Verify RF connections, attenuation, and authorization before transmitting.</p>
+      </div>
+      <div class="dialog-actions">
+        <button type="submit" value="cancel" class="btn">Cancel</button>
+        <button type="submit" value="run" class="btn primary" id="confirm-run">Run scenario</button>
+      </div>
+    </form>
+  </dialog>
+
   <script src="/app.js"></script>
 </body>
 </html>

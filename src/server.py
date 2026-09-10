@@ -218,7 +218,10 @@ class Runner:
                 raise ValueError(f"{item.get('label', argument_id)} must be at least {item['min']}")
             if "max" in item and value > item["max"]:
                 raise ValueError(f"{item.get('label', argument_id)} must be no more than {item['max']}")
-            values[argument_id] = str(value)
+            # Avoid adding a trailing ".0" to whole-valued numeric arguments.
+            # Command-line tools that require integers should receive the same
+            # representation the user entered in the number field.
+            values[argument_id] = str(int(value)) if isinstance(value, float) and value.is_integer() else str(value)
         return values
 
     def stop(self) -> dict:

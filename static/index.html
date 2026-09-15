@@ -9,26 +9,43 @@
 <body>
   <div class="page">
     <header class="page-header">
-      <div>
-        <h1>RF Control Panel</h1>
-        <p class="subtle">Run predefined RF scenarios and monitor execution.</p>
+      <div class="brand-block">
+        <div class="brand-badge" aria-hidden="true">
+          <img src="https://raw.githubusercontent.com/bwebb702/rf-control-panel/refs/heads/main/230202-F-AFHRA-207.png" alt="">
+        </div>
+        <div class="brand-copy">
+          <p class="eyebrow">Mission systems</p>
+          <h1>RF CONTROL PANEL</h1>
+        </div>
       </div>
-      <p id="range-status" class="state idle" aria-live="polite">Checking hardware</p>
     </header>
 
     <p id="catalog-error" class="banner error" role="alert" hidden></p>
 
     <div class="workspace">
-      <aside class="scenario-panel" aria-labelledby="scenario-heading">
-        <h2 id="scenario-heading">Scenarios</h2>
-        <div id="scenario-list" class="scenario-list" role="radiogroup" aria-labelledby="scenario-heading">
-          <p class="subtle">Loading scenarios…</p>
-        </div>
+      <aside class="scenario-panel" aria-label="Control panel tabs">
+        <nav class="tab-list" role="tablist" aria-label="Control panel sections">
+          <button type="button" class="tab-button active" id="tab-scenarios" role="tab" aria-selected="true" aria-controls="panel-scenarios">Scenarios</button>
+          <div id="scenario-picker-panel" class="scenario-picker-panel is-visible" aria-hidden="false">
+            <select id="scenario-list" class="scenario-list" aria-label="Scenario list">
+              <option value="">Loading scenarios…</option>
+            </select>
+            <button type="button" class="btn small add-scenario" id="add-scenario">Add Scenario</button>
+          </div>
+          <button type="button" class="tab-button" id="tab-hardware" role="tab" aria-selected="false" aria-controls="panel-hardware">Hardware status</button>
+          <div id="hardware-picker-panel" class="scenario-picker-panel" aria-hidden="true">
+            <button type="button" class="btn small add-scenario" id="add-hardware">Add Hardware</button>
+          </div>
+          <button type="button" class="tab-button" id="tab-rf-switch" role="tab" aria-selected="false" aria-controls="panel-rf-switch">RF switch config</button>
+        </nav>
       </aside>
 
       <main class="workspace-content">
-        <section class="section" id="config" hidden>
-          <h2 id="config-name">Scenario</h2>
+        <section class="tab-panel section" id="panel-scenarios" role="tabpanel" aria-labelledby="tab-scenarios">
+          <section id="config" class="scenario-config" hidden>
+          <div class="row">
+            <h2 id="config-name">Scenario</h2>
+          </div>
           <p id="config-description" class="subtle" hidden></p>
 
           <h3 class="minor">Required hardware</h3>
@@ -44,9 +61,58 @@
               </button>
             </div>
           </form>
+          </section>
         </section>
 
-        <section class="section" aria-labelledby="run-heading">
+        <section class="tab-panel section" id="panel-hardware" role="tabpanel" aria-labelledby="tab-hardware" hidden>
+          <h2>Hardware status</h2>
+          <ul id="hardware-status" class="hardware" aria-live="polite">
+            <li class="detail">Checking hardware…</li>
+          </ul>
+        </section>
+
+        <section class="tab-panel section" id="panel-rf-switch" role="tabpanel" aria-labelledby="tab-rf-switch" hidden>
+          <h2>RF switch config</h2>
+        </section>
+
+        <section class="tab-panel section" id="panel-add-scenario" role="tabpanel" aria-labelledby="add-scenario-heading" hidden>
+          <h2 id="add-scenario-heading">Add Scenario</h2>
+          <form id="add-scenario-form" class="add-scenario-form">
+            <div class="field">
+              <label for="new-scenario-name">Scenario name:</label>
+              <input type="text" id="new-scenario-name" name="name" required>
+            </div>
+            <div class="field">
+              <label for="new-scenario-hardware">Hardware:</label>
+              <select id="new-scenario-hardware" name="hardware">
+                <option value="">Select hardware</option>
+              </select>
+            </div>
+          </form>
+        </section>
+
+        <section class="tab-panel section" id="panel-add-hardware" role="tabpanel" aria-labelledby="add-hardware-heading" hidden>
+          <h2 id="add-hardware-heading">Add Hardware</h2>
+          <form id="add-hardware-form" class="add-hardware-form">
+            <div class="field">
+              <label for="new-hardware-name">Enter unique hardware name:</label>
+              <input type="text" id="new-hardware-name" name="name" required>
+            </div>
+            <div class="field">
+              <label for="new-hardware-ip">Enter IP address:</label>
+              <input type="text" id="new-hardware-ip" name="ip_address" inputmode="decimal" placeholder="xxx.xxx.xxx.xxx" pattern="((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)" title="Enter an IPv4 address such as 192.168.1.10" required>
+            </div>
+            <fieldset class="hardware-types">
+              <legend>Hardware type</legend>
+              <label><input type="radio" name="hardware_type" value="signal-generator" required>Signal Generator</label>
+              <label><input type="radio" name="hardware_type" value="modem">Modem</label>
+              <label><input type="radio" name="hardware_type" value="rf-switch">RF Switch</label>
+            </fieldset>
+            <button type="button" id="add-hardware-submit" class="btn primary add-hardware-submit" disabled>Add hardware</button>
+          </form>
+        </section>
+
+          <section class="section run-section" id="run-section" aria-labelledby="run-heading">
           <div class="row">
             <h2 id="run-heading">Current run</h2>
             <span id="run-state" class="state idle" aria-live="polite">Idle</span>
@@ -73,11 +139,9 @@
           <div class="actions">
             <button type="button" id="stop" class="btn danger" disabled>Stop scenario</button>
           </div>
-        </section>
+          </section>
       </main>
     </div>
-
-    <footer>Check RF connections, attenuation, and authorization before transmitting.</footer>
   </div>
 
   <dialog id="confirm" class="dialog" aria-labelledby="confirm-title">
@@ -94,6 +158,23 @@
       <div class="dialog-actions">
         <button type="submit" value="cancel" class="btn">Cancel</button>
         <button type="submit" value="run" class="btn primary" id="confirm-run">Run scenario</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="rf-switch-auth" class="dialog" aria-labelledby="rf-switch-auth-title">
+    <form id="rf-switch-auth-form">
+      <div class="dialog-header">
+        <h2 id="rf-switch-auth-title">RF switch config access</h2>
+      </div>
+      <div class="dialog-body">
+        <label for="rf-switch-password">Password</label>
+        <input type="password" id="rf-switch-password" name="password" autocomplete="current-password" required>
+        <p id="rf-switch-auth-error" class="banner error" role="alert" hidden></p>
+      </div>
+      <div class="dialog-actions">
+        <button type="button" class="btn" id="rf-switch-auth-cancel">Cancel</button>
+        <button type="submit" class="btn primary">Unlock</button>
       </div>
     </form>
   </dialog>

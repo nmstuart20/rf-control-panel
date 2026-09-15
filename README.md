@@ -17,6 +17,14 @@ chmod +x modem_control.sh
 python3 src/server.py
 ```
 
+To password-protect the RF switch config tab, set `RF_SWITCH_PASSWORD` before
+starting the server. The password is checked by the server and is never sent to
+the browser as configuration:
+
+```bash
+RF_SWITCH_PASSWORD='use-a-strong-password' python3 src/server.py
+```
+
 ## Configure scenarios
 
 Edit `scenarios/scenarios.json` to define a scenario and what commands and equipment are needed to run it.
@@ -88,3 +96,9 @@ failed after its cleanup commands run if one of its regular steps failed.
 ```
 
 When using Signal Hound, place `vsg_api.py` and `libvsg_api.so.1.2.1` in the project-root `vsgdevice/` directory.
+
+
+## Things to add 
+
+- Multiple scenarios open at as tabs
+- More modem config control (voltage on RF out)

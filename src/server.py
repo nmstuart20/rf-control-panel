@@ -4,12 +4,15 @@ from __future__ import annotations
 import argparse
 import hmac
 import json
+import math
 import os
+import re
 import signal
 import secrets
 import socket
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 import uuid
@@ -23,6 +26,107 @@ from urllib.parse import unquote, urlparse
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 STATIC = PROJECT_ROOT / "static"
 MAX_LOG_LINES = 2000
+SCENARIO_ID_PATTERN = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
+ARGUMENT_ID_PATTERN = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+
+
+def _finite_number(value: object, label: str) -> int | float:
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
+        raise ValueError(f"{label} must be a finite number")
+    return value
+
+
+def validate_scenario(item: object, hardware_names: set[str] | None = None) -> dict:
+    if not isinstance(item, dict):
+        raise ValueError("scenario must be an object")
+
+    scenario_id = item.get("id")
+    if not isinstance(scenario_id, str) or not SCENARIO_ID_PATTERN.fullmatch(scenario_id):
+        raise ValueError("scenario id must contain lowercase letters, numbers, and single hyphens")
+    name = item.get("name")
+    if not isinstance(name, str) or not name.strip():
+        raise ValueError(f"scenario {scenario_id} needs a name")
+    if len(name.strip()) > 120:
+        raise ValueError("scenario name must be 120 characters or fewer")
+    description = item.get("description")
+    if description is not None and (not isinstance(description, str) or len(description) > 1000):
+        raise ValueError(f"scenario {scenario_id} has an invalid description")
+
+    equipment = item.get("equipment", [])
+    if not isinstance(equipment, list) or not all(isinstance(value, str) and value for value in equipment):
+        raise ValueError(f"scenario {scenario_id} has invalid equipment")
+    if len(equipment) != len(set(equipment)):
+        raise ValueError(f"scenario {scenario_id} contains duplicate equipment")
+    if hardware_names is not None:
+        unknown = [value for value in equipment if value not in hardware_names]
+        if unknown:
+            raise ValueError(f"unknown hardware: {', '.join(unknown)}")
+
+    arguments = item.get("arguments", [])
+    if not isinstance(arguments, list):
+        raise ValueError(f"scenario {scenario_id} has invalid arguments")
+    argument_ids: set[str] = set()
+    for argument in arguments:
+        if not isinstance(argument, dict):
+            raise ValueError(f"scenario {scenario_id} has an invalid argument")
+        argument_id = argument.get("id")
+        argument_type = argument.get("type", "number")
+        if (
+            not isinstance(argument_id, str)
+            or not ARGUMENT_ID_PATTERN.fullmatch(argument_id)
+            or argument_id in argument_ids
+            or argument_type not in {"number", "integer"}
+        ):
+            raise ValueError(f"scenario {scenario_id} has an invalid argument")
+        argument_ids.add(argument_id)
+        if "label" in argument and not isinstance(argument["label"], str):
+            raise ValueError(f"argument {argument_id} has an invalid label")
+        if "unit" in argument and not isinstance(argument["unit"], str):
+            raise ValueError(f"argument {argument_id} has an invalid unit")
+        default = _finite_number(argument.get("default"), f"argument {argument_id} default")
+        minimum = _finite_number(argument["min"], f"argument {argument_id} minimum") if "min" in argument else None
+        maximum = _finite_number(argument["max"], f"argument {argument_id} maximum") if "max" in argument else None
+        step = _finite_number(argument["step"], f"argument {argument_id} step") if "step" in argument else None
+        if argument_type == "integer" and any(
+            value is not None and not float(value).is_integer() for value in (default, minimum, maximum, step)
+        ):
+            raise ValueError(f"integer argument {argument_id} must use whole numbers")
+        if minimum is not None and maximum is not None and minimum > maximum:
+            raise ValueError(f"argument {argument_id} minimum cannot exceed its maximum")
+        if minimum is not None and default < minimum or maximum is not None and default > maximum:
+            raise ValueError(f"argument {argument_id} default is outside its allowed range")
+        if step is not None and step <= 0:
+            raise ValueError(f"argument {argument_id} step must be greater than zero")
+
+    steps = item.get("steps")
+    if not isinstance(steps, list) or not steps:
+        raise ValueError(f"scenario {scenario_id} needs at least one step")
+    stop_steps = item.get("stop_steps", [])
+    if not isinstance(stop_steps, list):
+        raise ValueError(f"scenario {scenario_id} has invalid stop steps")
+    placeholder = re.compile(r"^\{([^{}]+)\}$")
+    for step in [*steps, *stop_steps]:
+        command = step.get("command") if isinstance(step, dict) else None
+        if not isinstance(command, list) or not command or not all(
+            isinstance(value, str) and value for value in command
+        ):
+            raise ValueError(f"scenario {scenario_id} has an invalid command")
+        if "name" in step and (not isinstance(step["name"], str) or not step["name"].strip()):
+            raise ValueError(f"scenario {scenario_id} has an invalid step name")
+        if "background" in step and not isinstance(step["background"], bool):
+            raise ValueError(f"scenario {scenario_id} has an invalid background flag")
+        environment = step.get("environment", {})
+        if not isinstance(environment, dict) or not all(
+            isinstance(key, str) and key and isinstance(value, str)
+            for key, value in environment.items()
+        ):
+            raise ValueError(f"scenario {scenario_id} has an invalid environment")
+        for value in [*command, *environment.values()]:
+            match = placeholder.fullmatch(value)
+            if match and match.group(1) not in argument_ids:
+                raise ValueError(f"scenario {scenario_id} references unknown argument {match.group(1)}")
+
+    return item
 
 
 def load_catalog(path: Path) -> dict[str, dict]:
@@ -33,34 +137,9 @@ def load_catalog(path: Path) -> dict[str, dict]:
         raise ValueError("scenarios.json must contain a 'scenarios' list")
     result = {}
     for item in scenarios:
-        if not isinstance(item, dict) or not isinstance(item.get("id"), str):
-            raise ValueError("every scenario needs a string id")
+        validate_scenario(item)
         if item["id"] in result:
             raise ValueError(f"duplicate scenario id: {item['id']}")
-        arguments = item.get("arguments", [])
-        if not isinstance(arguments, list):
-            raise ValueError(f"scenario {item['id']} has invalid arguments")
-        argument_ids = set()
-        for argument in arguments:
-            if not isinstance(argument, dict) or not isinstance(argument.get("id"), str):
-                raise ValueError(f"scenario {item['id']} has an invalid argument")
-            if argument["id"] in argument_ids or argument.get("type", "number") not in {"number", "integer"}:
-                raise ValueError(f"scenario {item['id']} has an invalid argument")
-            argument_ids.add(argument["id"])
-        steps = item.get("steps")
-        if not isinstance(steps, list) or not steps:
-            raise ValueError(f"scenario {item['id']} needs at least one step")
-        stop_steps = item.get("stop_steps", [])
-        if not isinstance(stop_steps, list):
-            raise ValueError(f"scenario {item['id']} has invalid stop steps")
-        for step in [*steps, *stop_steps]:
-            command = step.get("command") if isinstance(step, dict) else None
-            if not isinstance(command, list) or not command or not all(
-                isinstance(value, str) and value for value in command
-            ):
-                raise ValueError(f"scenario {item['id']} has an invalid command")
-            if "background" in step and not isinstance(step["background"], bool):
-                raise ValueError(f"scenario {item['id']} has an invalid background flag")
         result[item["id"]] = item
     return result
 
@@ -119,8 +198,54 @@ class Runner:
             safe.append(entry)
         return safe
 
+    def create_scenario(self, value: object) -> dict:
+        """Validate and atomically append a scenario to the JSON catalog."""
+        with self.lock:
+            with self.catalog_path.open(encoding="utf-8") as handle:
+                config = json.load(handle)
+            scenarios = config.get("scenarios")
+            checks = config.get("hardware_checks", {})
+            if not isinstance(scenarios, list) or not isinstance(checks, dict):
+                raise ValueError("invalid scenario catalog")
+            scenario = validate_scenario(value, set(checks))
+            if not scenario.get("equipment"):
+                raise ValueError("select at least one configured hardware item")
+            if any(existing.get("id") == scenario["id"] for existing in scenarios if isinstance(existing, dict)):
+                raise RuntimeError(f"scenario id already exists: {scenario['id']}")
+
+            # Copy user input into JSON-compatible values and normalize optional text.
+            saved = json.loads(json.dumps(scenario))
+            saved["name"] = saved["name"].strip()
+            if not saved.get("description", "").strip():
+                saved.pop("description", None)
+            scenarios.append(saved)
+            self._write_catalog(config)
+            self.hardware_cache = None
+            return saved
+
+    def _write_catalog(self, config: dict) -> None:
+        temporary_name = None
+        try:
+            with tempfile.NamedTemporaryFile(
+                mode="w", encoding="utf-8", dir=self.catalog_path.parent,
+                prefix=f".{self.catalog_path.name}.", suffix=".tmp", delete=False,
+            ) as handle:
+                temporary_name = handle.name
+                json.dump(config, handle, indent=2)
+                handle.write("\n")
+                handle.flush()
+                os.fsync(handle.fileno())
+            os.chmod(temporary_name, self.catalog_path.stat().st_mode & 0o777)
+            os.replace(temporary_name, self.catalog_path)
+        finally:
+            if temporary_name:
+                try:
+                    os.unlink(temporary_name)
+                except FileNotFoundError:
+                    pass
+
     def hardware(self) -> list[dict]:
-        """Check each unique piece of equipment referenced by a scenario."""
+        """Check every piece of equipment configured in hardware_checks."""
         now = time.monotonic()
         with self.lock:
             if self.hardware_cache and now - self.hardware_cache[0] < 5:
@@ -129,16 +254,23 @@ class Runner:
         with self.catalog_path.open(encoding="utf-8") as handle:
             config = json.load(handle)
         checks = config.get("hardware_checks", {})
-        names = []
-        for scenario in config.get("scenarios", []):
-            for name in scenario.get("equipment", []):
-                if isinstance(name, str) and name not in names:
-                    names.append(name)
+        if not isinstance(checks, dict):
+            raise ValueError("hardware_checks must be an object")
+        names = list(checks)
 
         results = [self._check_hardware(name, checks.get(name)) for name in names]
         with self.lock:
             self.hardware_cache = (now, results)
         return results
+
+    def hardware_names(self) -> list[str]:
+        """Return configured hardware names without waiting for connection probes."""
+        with self.catalog_path.open(encoding="utf-8") as handle:
+            config = json.load(handle)
+        checks = config.get("hardware_checks", {})
+        if not isinstance(checks, dict):
+            raise ValueError("hardware_checks must be an object")
+        return list(checks)
 
     def _check_hardware(self, name: str, check: object) -> dict:
         if not isinstance(check, dict):
@@ -221,6 +353,11 @@ class Runner:
             for step in scenario.get(key, []):
                 prepared_step = dict(step)
                 prepared_step["command"] = [values.get(token[1:-1], token) if token.startswith("{") and token.endswith("}") else token for token in step["command"]]
+                prepared_step["environment"] = {
+                    name: values.get(token[1:-1], token)
+                    if token.startswith("{") and token.endswith("}") else token
+                    for name, token in step.get("environment", {}).items()
+                }
                 prepared[key].append(prepared_step)
         with self.lock:
             if self.run and self.run.state in {"starting", "running", "stopping"}:
@@ -438,9 +575,12 @@ class Handler(SimpleHTTPRequestHandler):
     def _body(self) -> dict:
         try:
             length = int(self.headers.get("Content-Length", "0"))
-            if length > 16_384:
+            if length > 262_144:
                 raise ValueError("request too large")
-            return json.loads(self.rfile.read(length) or b"{}")
+            body = json.loads(self.rfile.read(length) or b"{}")
+            if not isinstance(body, dict):
+                raise ValueError("JSON body must be an object")
+            return body
         except (ValueError, json.JSONDecodeError) as exc:
             raise ValueError("invalid JSON body") from exc
 
@@ -469,6 +609,11 @@ class Handler(SimpleHTTPRequestHandler):
                 self._json({"hardware": self.runner.hardware()})
             except Exception as exc:
                 self._json({"error": str(exc)}, HTTPStatus.INTERNAL_SERVER_ERROR)
+        elif path == "/api/hardware/options":
+            try:
+                self._json({"hardware": self.runner.hardware_names()})
+            except Exception as exc:
+                self._json({"error": str(exc)}, HTTPStatus.INTERNAL_SERVER_ERROR)
         elif path == "/api/rf-switch":
             self._json({"unlocked": True})
         else:
@@ -480,6 +625,9 @@ class Handler(SimpleHTTPRequestHandler):
             body = self._body()
             if path == "/api/run":
                 self._json({"run": self.runner.start(body.get("scenario_id"), body.get("arguments"))}, HTTPStatus.ACCEPTED)
+            elif path == "/api/scenarios":
+                scenario = self.runner.create_scenario(body.get("scenario"))
+                self._json({"scenario": scenario}, HTTPStatus.CREATED)
             elif path == "/api/stop":
                 self._json({"run": self.runner.stop()}, HTTPStatus.ACCEPTED)
             elif path == "/api/rf-switch/access":

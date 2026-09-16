@@ -78,15 +78,72 @@
         <section class="tab-panel section" id="panel-add-scenario" role="tabpanel" aria-labelledby="add-scenario-heading" hidden>
           <h2 id="add-scenario-heading">Add Scenario</h2>
           <form id="add-scenario-form" class="add-scenario-form">
-            <div class="field">
-              <label for="new-scenario-name">Scenario name:</label>
-              <input type="text" id="new-scenario-name" name="name" required>
-            </div>
-            <div class="field">
-              <label for="new-scenario-hardware">Hardware:</label>
-              <select id="new-scenario-hardware" name="hardware">
-                <option value="">Select hardware</option>
-              </select>
+            <p class="subtle">Build a reusable scenario from configured hardware, numeric inputs, and ordered command steps.</p>
+
+            <fieldset class="editor-section editor-basics">
+              <legend>Details</legend>
+              <div class="field">
+                <label for="new-scenario-name">Scenario name</label>
+                <input type="text" id="new-scenario-name" name="name" maxlength="120" required>
+              </div>
+              <div class="field">
+                <label for="new-scenario-id">Scenario ID</label>
+                <input type="text" id="new-scenario-id" name="id" pattern="[a-z0-9]+(?:-[a-z0-9]+)*" placeholder="generated-from-name" required>
+                <span class="field-help">Lowercase letters, numbers, and hyphens.</span>
+              </div>
+              <div class="field full-width">
+                <label for="new-scenario-description">Description <span class="optional">optional</span></label>
+                <textarea id="new-scenario-description" name="description" maxlength="1000" rows="3"></textarea>
+              </div>
+            </fieldset>
+
+            <fieldset class="editor-section">
+              <legend>Required hardware</legend>
+              <div id="new-scenario-hardware" class="hardware-choices">
+                <p class="subtle">Loading configured hardware…</p>
+              </div>
+              <span class="field-help">Hardware choices come from the catalog's hardware checks.</span>
+            </fieldset>
+
+            <section class="editor-section" aria-labelledby="scenario-arguments-heading">
+              <div class="editor-heading">
+                <div>
+                  <h3 id="scenario-arguments-heading">Arguments</h3>
+                  <p class="field-help">Numeric values users can set before running the scenario.</p>
+                </div>
+                <button type="button" id="add-argument" class="btn small">Add argument</button>
+              </div>
+              <div id="new-scenario-arguments" class="editor-items"></div>
+              <p id="arguments-empty" class="empty-editor">No arguments. Add one if a command needs a configurable value.</p>
+            </section>
+
+            <section class="editor-section" aria-labelledby="scenario-steps-heading">
+              <div class="editor-heading">
+                <div>
+                  <h3 id="scenario-steps-heading">Steps</h3>
+                  <p class="field-help">Commands run in this order. Each command argument is passed directly, without a shell.</p>
+                </div>
+                <button type="button" id="add-step" class="btn small">Add step</button>
+              </div>
+              <div id="new-scenario-steps" class="editor-items"></div>
+            </section>
+
+            <section class="editor-section" aria-labelledby="scenario-stop-steps-heading">
+              <div class="editor-heading">
+                <div>
+                  <h3 id="scenario-stop-steps-heading">Cleanup steps <span class="optional">optional</span></h3>
+                  <p class="field-help">Run in order when the scenario is stopped or a regular step fails.</p>
+                </div>
+                <button type="button" id="add-stop-step" class="btn small">Add cleanup step</button>
+              </div>
+              <div id="new-scenario-stop-steps" class="editor-items"></div>
+              <p id="stop-steps-empty" class="empty-editor">No cleanup steps.</p>
+            </section>
+
+            <p id="add-scenario-error" class="banner error" role="alert" hidden></p>
+            <div class="editor-actions">
+              <button type="button" id="cancel-add-scenario" class="btn">Cancel</button>
+              <button type="submit" id="create-scenario" class="btn primary">Create scenario</button>
             </div>
           </form>
         </section>
@@ -178,6 +235,101 @@
       </div>
     </form>
   </dialog>
+
+  <template id="argument-editor-template">
+    <article class="editor-card argument-editor">
+      <div class="card-heading">
+        <h4>Argument</h4>
+        <button type="button" class="btn small danger remove-item">Remove</button>
+      </div>
+      <div class="editor-grid argument-grid">
+        <div class="field">
+          <label>Argument ID</label>
+          <input type="text" data-field="id" pattern="[A-Za-z_][A-Za-z0-9_]*" placeholder="frequency" required>
+        </div>
+        <div class="field">
+          <label>Label</label>
+          <input type="text" data-field="label" placeholder="Carrier frequency" required>
+        </div>
+        <div class="field">
+          <label>Type</label>
+          <select data-field="type"><option value="number">Number</option><option value="integer">Integer</option></select>
+        </div>
+        <div class="field">
+          <label>Default</label>
+          <input type="number" data-field="default" step="any" required>
+        </div>
+        <div class="field">
+          <label>Minimum <span class="optional">optional</span></label>
+          <input type="number" data-field="min" step="any">
+        </div>
+        <div class="field">
+          <label>Maximum <span class="optional">optional</span></label>
+          <input type="number" data-field="max" step="any">
+        </div>
+        <div class="field">
+          <label>Step size <span class="optional">optional</span></label>
+          <input type="number" data-field="step" min="0" step="any">
+        </div>
+        <div class="field">
+          <label>Unit <span class="optional">optional</span></label>
+          <input type="text" data-field="unit" placeholder="Hz">
+        </div>
+      </div>
+    </article>
+  </template>
+
+  <template id="step-editor-template">
+    <article class="editor-card step-editor">
+      <div class="card-heading">
+        <h4>Step</h4>
+        <div class="item-actions">
+          <button type="button" class="btn small move-up" aria-label="Move step up">↑</button>
+          <button type="button" class="btn small move-down" aria-label="Move step down">↓</button>
+          <button type="button" class="btn small danger remove-item">Remove</button>
+        </div>
+      </div>
+      <div class="field">
+        <label>Step name</label>
+        <input type="text" data-field="name" placeholder="Configure device" required>
+      </div>
+      <label class="background-choice"><input type="checkbox" data-field="background"> Continue this command in the background</label>
+      <div class="nested-editor">
+        <div class="nested-heading">
+          <div>
+            <h5>Command arguments</h5>
+            <p class="field-help">One item per argument, beginning with the executable. Use <code>{argument_id}</code> for a scenario value.</p>
+          </div>
+          <button type="button" class="btn small add-command-part">Add item</button>
+        </div>
+        <div class="command-parts"></div>
+      </div>
+      <div class="nested-editor">
+        <div class="nested-heading">
+          <div>
+            <h5>Environment variables <span class="optional">optional</span></h5>
+          </div>
+          <button type="button" class="btn small add-environment">Add variable</button>
+        </div>
+        <div class="environment-parts"></div>
+      </div>
+    </article>
+  </template>
+
+  <template id="command-part-template">
+    <div class="inline-editor command-part">
+      <input type="text" aria-label="Command argument" placeholder="python3" required>
+      <button type="button" class="btn small danger remove-inline" aria-label="Remove command argument">×</button>
+    </div>
+  </template>
+
+  <template id="environment-part-template">
+    <div class="inline-editor environment-part">
+      <input type="text" class="environment-name" aria-label="Environment variable name" pattern="[A-Za-z_][A-Za-z0-9_]*" placeholder="VARIABLE" required>
+      <input type="text" class="environment-value" aria-label="Environment variable value" placeholder="value" required>
+      <button type="button" class="btn small danger remove-inline" aria-label="Remove environment variable">×</button>
+    </div>
+  </template>
 
   <script src="/app.js"></script>
 </body>

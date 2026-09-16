@@ -82,19 +82,49 @@ h3.minor { margin: 20px 0 8px; color: var(--fg-muted); font-size: 12px; font-wei
 .scenario-config { margin-top: 8px; padding-top: 4px; }
 .run-section { margin-top: 0; }
 .lock-icon { display: inline-block; margin-left: 6px; color: #9aa1aa; filter: grayscale(1); font-size: 12px; }
-.add-scenario-form { display: grid; gap: 16px; max-width: 420px; }
+.add-scenario-form { display: grid; gap: 20px; max-width: 760px; }
 .add-hardware-form { display: grid; gap: 16px; max-width: 420px; }
-input[type="text"], .add-scenario-form select {
+input[type="text"], textarea, .add-scenario-form select {
   width: 100%; padding: 5px 10px; border: 1px solid var(--border); border-radius: 6px;
   background: var(--canvas); color: var(--fg); font: inherit; line-height: 20px;
 }
-input[type="text"]:focus, .add-scenario-form select:focus { border-color: var(--accent); outline: 1px solid var(--accent); }
+textarea { resize: vertical; }
+input[type="text"]:focus, textarea:focus, .add-scenario-form select:focus { border-color: var(--accent); outline: 1px solid var(--accent); }
 .add-hardware-form input[type="text"]:focus { border-color: var(--accent); outline: 1px solid var(--accent); }
 .hardware-types { display: grid; gap: 8px; padding: 0; border: 0; }
 .hardware-types legend { margin-bottom: 2px; color: var(--fg-muted); font-size: 12px; font-weight: 600; text-transform: uppercase; }
 .hardware-types label { display: flex; align-items: center; gap: 8px; }
 .hardware-types input { accent-color: var(--success); }
 .add-hardware-submit { justify-self: start; }
+
+/* Scenario editor */
+.editor-section { min-width: 0; margin: 0; padding: 16px; border: 1px solid var(--border); border-radius: 8px; }
+fieldset.editor-section > legend { padding: 0 6px; font-size: 14px; font-weight: 600; }
+.editor-basics { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.full-width { grid-column: 1 / -1; }
+.field-help { display: block; margin-top: 3px; color: var(--fg-muted); font-size: 12px; font-weight: 400; }
+.optional { color: var(--fg-subtle); font-size: 11px; font-weight: 400; }
+.hardware-choices { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 8px 16px; }
+.hardware-choice { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.hardware-choice input, .background-choice input { accent-color: var(--success); }
+.hardware-choice span { overflow-wrap: anywhere; }
+.editor-heading, .nested-heading, .card-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.editor-heading h3, .card-heading h4, .nested-heading h5 { margin: 0; font-size: 14px; }
+.nested-heading h5 { font-size: 13px; }
+.editor-items { display: grid; gap: 12px; margin-top: 12px; }
+.empty-editor { margin-top: 12px; color: var(--fg-subtle); font-size: 12px; }
+.editor-card { display: grid; gap: 14px; padding: 14px; border: 1px solid var(--border-muted); border-radius: 7px; background: var(--canvas-subtle); }
+.editor-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.argument-grid .field:nth-child(-n+2) { grid-column: span 2; }
+.item-actions { display: flex; gap: 6px; }
+.background-choice { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+.nested-editor { display: grid; gap: 8px; padding-top: 10px; border-top: 1px solid var(--border-muted); }
+.inline-editor { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; margin-top: 7px; }
+.environment-part { grid-template-columns: minmax(120px, 0.7fr) minmax(160px, 1.3fr) auto; }
+.inline-editor:first-child { margin-top: 0; }
+.inline-editor .btn { justify-content: center; width: 32px; }
+.editor-actions { display: flex; justify-content: flex-end; gap: 8px; }
+.add-scenario-form code { color: var(--fg); }
 
 /* Hardware */
 .hardware { list-style: none; padding: 0; }
@@ -205,4 +235,11 @@ input[type="password"]:focus { border-color: var(--accent); outline: 1px solid v
   .scenario-list { max-height: 280px; }
   .meta { gap: 12px 24px; }
   .logs { height: 260px; }
+  .editor-basics, .editor-grid { grid-template-columns: 1fr; }
+  .full-width, .argument-grid .field:nth-child(-n+2) { grid-column: auto; }
+  .editor-heading, .nested-heading { align-items: stretch; flex-direction: column; }
+  .editor-heading .btn, .nested-heading .btn { align-self: flex-start; }
+  .environment-part { grid-template-columns: 1fr auto; }
+  .environment-part .environment-value { grid-column: 1; }
+  .environment-part .remove-inline { grid-column: 2; grid-row: 1 / span 2; }
 }

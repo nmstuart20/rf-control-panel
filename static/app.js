@@ -28,12 +28,17 @@ const addScenarioButton = el('add-scenario');
 const hardwarePickerPanel = el('hardware-picker-panel');
 const addHardwareButton = el('add-hardware');
 const newScenarioHardware = el('new-scenario-hardware');
+const addScenarioForm = el('add-scenario-form');
+const newScenarioArguments = el('new-scenario-arguments');
+const newScenarioSteps = el('new-scenario-steps');
+const newScenarioStopSteps = el('new-scenario-stop-steps');
 const addHardwareForm = el('add-hardware-form');
 const addHardwareSubmit = el('add-hardware-submit');
 
 let scenarios = [];
 let selectedId = null;
 let hardware = new Map();
+let hardwareOptions = [];
 let currentRun = null;
 let locked = false;
 let stopPending = false;
@@ -41,6 +46,7 @@ let logView = {runId: null, rendered: 0};
 let stepTracker = {runId: null, index: -1};
 let activeTab = 'scenarios';
 let rfSwitchUnlocked = true;
+let editorFieldSequence = 0;
 
 async function api(path, options = {}) {
   const response = await fetch(path, {headers: {'Content-Type': 'application/json'}, ...options});
@@ -221,6 +227,19 @@ async function loadHardware() {
   renderScenarioHardware();
 }
 
+async function loadHardwareOptions() {
+  try {
+    const data = await api('/api/hardware/options');
+    hardwareOptions = data.hardware || [];
+    renderHardwareOptions(hardwareOptions.map(name => ({name})));
+  } catch (_) {
+    if (!hardwareOptions.length && hardware.size) {
+      hardwareOptions = [...hardware.keys()];
+      renderHardwareOptions(hardwareOptions.map(name => ({name})));
+    }
+  }
+}
+
 function renderScenarioHardware() {
   const list = el('config-hardware');
   const names = selectedScenario()?.equipment || [];
@@ -252,7 +271,6 @@ function renderHardwareStatus() {
   const list = el('hardware-status');
   const items = [...hardware.values()];
   list.replaceChildren();
-  renderHardwareOptions(items);
   if (!items.length) {
     const item = document.createElement('li');
     item.className = 'detail';
@@ -282,16 +300,221 @@ function renderHardwareStatus() {
 }
 
 function renderHardwareOptions(items) {
+  const selected = new Set(
+    [...newScenarioHardware.querySelectorAll('input:checked')].map(input => input.value),
+  );
   newScenarioHardware.replaceChildren();
-  const placeholder = document.createElement('option');
-  placeholder.value = '';
-  placeholder.textContent = items.length ? 'Select hardware' : 'No hardware available';
-  newScenarioHardware.append(placeholder);
+  if (!items.length) {
+    const message = document.createElement('p');
+    message.className = 'subtle';
+    message.textContent = 'No hardware checks are configured.';
+    newScenarioHardware.append(message);
+    return;
+  }
   for (const item of items) {
-    const option = document.createElement('option');
-    option.value = item.name;
-    option.textContent = item.name;
-    newScenarioHardware.append(option);
+    const label = document.createElement('label');
+    label.className = 'hardware-choice';
+    const input = document.createElement('input');
+    input.type = 'checkbox';
+    input.name = 'equipment';
+    input.value = item.name;
+    input.checked = selected.has(item.name);
+    const text = document.createElement('span');
+    text.textContent = item.name;
+    label.append(input, text);
+    newScenarioHardware.append(label);
+  }
+}
+
+/* Scenario editor -------------------------------------------------------- */
+
+function templateElement(id) {
+  return el(id).content.firstElementChild.cloneNode(true);
+}
+
+function connectEditorLabels(root) {
+  for (const field of root.querySelectorAll('.field')) {
+    const label = field.querySelector('label');
+    const input = field.querySelector('input, select, textarea');
+    if (!label || !input) continue;
+    input.id = `scenario-editor-field-${++editorFieldSequence}`;
+    label.htmlFor = input.id;
+  }
+}
+
+function updateEditorEmptyStates() {
+  el('arguments-empty').hidden = Boolean(newScenarioArguments.children.length);
+  el('stop-steps-empty').hidden = Boolean(newScenarioStopSteps.children.length);
+  updateStepControls(newScenarioSteps, 'Step');
+  updateStepControls(newScenarioStopSteps, 'Cleanup step');
+}
+
+function updateStepControls(container, label) {
+  const cards = [...container.children];
+  cards.forEach((card, index) => {
+    card.querySelector('h4').textContent = `${label} ${index + 1}`;
+    card.querySelector('.move-up').disabled = index === 0;
+    card.querySelector('.move-down').disabled = index === cards.length - 1;
+  });
+}
+
+function addArgumentEditor() {
+  const card = templateElement('argument-editor-template');
+  connectEditorLabels(card);
+  card.querySelector('.remove-item').addEventListener('click', () => {
+    card.remove();
+    updateEditorEmptyStates();
+  });
+  newScenarioArguments.append(card);
+  updateEditorEmptyStates();
+  card.querySelector('[data-field="id"]').focus();
+}
+
+function addCommandPart(card, value = '') {
+  const row = templateElement('command-part-template');
+  const input = row.querySelector('input');
+  input.value = value;
+  row.querySelector('.remove-inline').addEventListener('click', () => {
+    row.remove();
+    updateCommandPartControls(card);
+  });
+  card.querySelector('.command-parts').append(row);
+  updateCommandPartControls(card);
+  return input;
+}
+
+function updateCommandPartControls(card) {
+  const rows = card.querySelectorAll('.command-part');
+  for (const button of card.querySelectorAll('.command-part .remove-inline')) {
+    button.disabled = rows.length === 1;
+  }
+}
+
+function addEnvironmentPart(card) {
+  const row = templateElement('environment-part-template');
+  row.querySelector('.remove-inline').addEventListener('click', () => row.remove());
+  card.querySelector('.environment-parts').append(row);
+  row.querySelector('.environment-name').focus();
+}
+
+function addStepEditor(container, cleanup = false) {
+  const card = templateElement('step-editor-template');
+  connectEditorLabels(card);
+  if (cleanup) card.querySelector('.background-choice').remove();
+  card.querySelector('.remove-item').addEventListener('click', () => {
+    card.remove();
+    updateEditorEmptyStates();
+  });
+  card.querySelector('.move-up').addEventListener('click', () => {
+    if (card.previousElementSibling) container.insertBefore(card, card.previousElementSibling);
+    updateEditorEmptyStates();
+  });
+  card.querySelector('.move-down').addEventListener('click', () => {
+    if (card.nextElementSibling) container.insertBefore(card.nextElementSibling, card);
+    updateEditorEmptyStates();
+  });
+  card.querySelector('.add-command-part').addEventListener('click', () => addCommandPart(card).focus());
+  card.querySelector('.add-environment').addEventListener('click', () => addEnvironmentPart(card));
+  container.append(card);
+  addCommandPart(card);
+  updateEditorEmptyStates();
+  card.querySelector('[data-field="name"]').focus();
+}
+
+function slugify(value) {
+  return value.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+}
+
+function resetScenarioEditor() {
+  addScenarioForm.reset();
+  el('new-scenario-id').dataset.touched = '';
+  newScenarioArguments.replaceChildren();
+  newScenarioSteps.replaceChildren();
+  newScenarioStopSteps.replaceChildren();
+  clearError(el('add-scenario-error'));
+  renderHardwareOptions(hardwareOptions.map(name => ({name})));
+  addStepEditor(newScenarioSteps);
+}
+
+function openScenarioEditor() {
+  if (!newScenarioSteps.children.length) resetScenarioEditor();
+  selectTab('add-scenario');
+  el('new-scenario-name').focus();
+}
+
+function optionalNumber(card, field) {
+  const value = card.querySelector(`[data-field="${field}"]`).value;
+  return value === '' ? undefined : Number(value);
+}
+
+function readArgument(card) {
+  const argument = {
+    id: card.querySelector('[data-field="id"]').value.trim(),
+    label: card.querySelector('[data-field="label"]').value.trim(),
+    type: card.querySelector('[data-field="type"]').value,
+    default: Number(card.querySelector('[data-field="default"]').value),
+  };
+  for (const field of ['min', 'max', 'step']) {
+    const value = optionalNumber(card, field);
+    if (value !== undefined) argument[field] = value;
+  }
+  const unit = card.querySelector('[data-field="unit"]').value.trim();
+  if (unit) argument.unit = unit;
+  return argument;
+}
+
+function readStep(card) {
+  const step = {
+    name: card.querySelector('[data-field="name"]').value.trim(),
+    command: [...card.querySelectorAll('.command-part input')].map(input => input.value.trim()),
+  };
+  const background = card.querySelector('[data-field="background"]');
+  if (background?.checked) step.background = true;
+  const environment = Object.create(null);
+  for (const row of card.querySelectorAll('.environment-part')) {
+    const name = row.querySelector('.environment-name').value.trim();
+    if (Object.hasOwn(environment, name)) throw new Error(`Environment variable ${name} is repeated in ${step.name}.`);
+    environment[name] = row.querySelector('.environment-value').value;
+  }
+  if (Object.keys(environment).length) step.environment = environment;
+  return step;
+}
+
+function scenarioFromEditor() {
+  const scenario = {
+    id: el('new-scenario-id').value.trim(),
+    name: el('new-scenario-name').value.trim(),
+    equipment: [...newScenarioHardware.querySelectorAll('input:checked')].map(input => input.value),
+    arguments: [...newScenarioArguments.children].map(readArgument),
+    steps: [...newScenarioSteps.children].map(readStep),
+  };
+  const description = el('new-scenario-description').value.trim();
+  if (description) scenario.description = description;
+  const stopSteps = [...newScenarioStopSteps.children].map(readStep);
+  if (stopSteps.length) scenario.stop_steps = stopSteps;
+  if (!scenario.equipment.length) throw new Error('Select at least one configured hardware item.');
+  if (!scenario.steps.length) throw new Error('Add at least one scenario step.');
+  return scenario;
+}
+
+async function createScenario(event) {
+  event.preventDefault();
+  clearError(el('add-scenario-error'));
+  const button = el('create-scenario');
+  button.disabled = true;
+  button.textContent = 'Creating…';
+  try {
+    const scenario = scenarioFromEditor();
+    await api('/api/scenarios', {method: 'POST', body: JSON.stringify({scenario})});
+    selectedId = scenario.id;
+    resetScenarioEditor();
+    await loadScenarios();
+    selectTab('scenarios');
+  } catch (error) {
+    showError(el('add-scenario-error'), `Unable to create scenario: ${error.message}`);
+  } finally {
+    button.disabled = false;
+    button.textContent = 'Create scenario';
   }
 }
 
@@ -544,8 +767,23 @@ el('clear-logs').addEventListener('click', () => {
 });
 
 scenarioList.addEventListener('change', () => selectScenario(scenarioList.value || null));
-addScenarioButton.addEventListener('click', () => selectTab('add-scenario'));
+addScenarioButton.addEventListener('click', openScenarioEditor);
 addHardwareButton.addEventListener('click', () => selectTab('add-hardware'));
+addScenarioForm.addEventListener('submit', createScenario);
+el('add-argument').addEventListener('click', addArgumentEditor);
+el('add-step').addEventListener('click', () => addStepEditor(newScenarioSteps));
+el('add-stop-step').addEventListener('click', () => addStepEditor(newScenarioStopSteps, true));
+el('cancel-add-scenario').addEventListener('click', () => {
+  resetScenarioEditor();
+  selectTab('scenarios');
+});
+el('new-scenario-name').addEventListener('input', event => {
+  const idInput = el('new-scenario-id');
+  if (!idInput.dataset.touched) idInput.value = slugify(event.target.value);
+});
+el('new-scenario-id').addEventListener('input', event => {
+  event.target.dataset.touched = 'true';
+});
 function updateAddHardwareButton() {
   addHardwareSubmit.disabled = !addHardwareForm.checkValidity();
 }
@@ -569,9 +807,12 @@ async function poll() {
   }
 }
 
+resetScenarioEditor();
 loadScenarios();
+loadHardwareOptions();
 loadHardware();
 poll();
 setInterval(poll, 1000);
 setInterval(loadHardware, 10000);
+setInterval(loadHardwareOptions, 30000);
 setInterval(updateElapsed, 1000);

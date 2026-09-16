@@ -27,7 +27,16 @@ RF_SWITCH_PASSWORD='use-a-strong-password' python3 src/server.py
 
 ## Configure scenarios
 
-Edit `scenarios/scenarios.json` to define a scenario and what commands and equipment are needed to run it.
+Use **Scenarios → Add Scenario** in the control panel to build and save a scenario. The editor supports:
+
+* one or more devices from `hardware_checks`
+* numeric or integer arguments with defaults, ranges, step sizes, and units
+* ordered command arguments, background commands, and environment variables
+* ordered cleanup commands that run after a stop or failure
+
+Created scenarios are validated and saved to `scenarios/scenarios.json`; they are immediately available in the scenario picker. Command items are passed directly to the process, so enter the executable as the first item and each command-line argument as a separate item. Use a full `{argument_id}` item to substitute a configured scenario argument.
+
+You can also edit `scenarios/scenarios.json` directly to define a scenario and what commands and equipment are needed to run it.
 
 Hardware listed in a scenario appears in the connection status section. Configure its
 probe once in the top-level `hardware_checks` object. Current supported probes are:

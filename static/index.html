@@ -11,7 +11,7 @@
     <header class="page-header">
       <div class="brand-block">
         <div class="brand-badge" aria-hidden="true">
-          <img src="https://raw.githubusercontent.com/bwebb702/rf-control-panel/refs/heads/main/230202-F-AFHRA-207.png" alt="">
+          <img src="/logo.png" alt="">
         </div>
         <div class="brand-copy">
           <p class="eyebrow">Mission systems</p>
@@ -36,6 +36,7 @@
           <div id="hardware-picker-panel" class="scenario-picker-panel" aria-hidden="true">
             <button type="button" class="btn small add-scenario" id="add-hardware">Add Hardware</button>
           </div>
+          <button type="button" class="tab-button" id="tab-history" role="tab" aria-selected="false" aria-controls="panel-history">Run history</button>
           <button type="button" class="tab-button" id="tab-rf-switch" role="tab" aria-selected="false" aria-controls="panel-rf-switch">RF switch config</button>
         </nav>
       </aside>
@@ -73,6 +74,31 @@
 
         <section class="tab-panel section" id="panel-rf-switch" role="tabpanel" aria-labelledby="tab-rf-switch" hidden>
           <h2>RF switch config</h2>
+        </section>
+
+        <section class="tab-panel section" id="panel-history" role="tabpanel" aria-labelledby="tab-history" hidden>
+          <div class="row">
+            <h2>Run history</h2>
+            <button type="button" id="refresh-history" class="btn small">Refresh</button>
+          </div>
+          <p class="subtle">Every run is archived with the commands that were executed, the values they were given, and the full output.</p>
+          <p id="history-error" class="banner error" role="alert" hidden></p>
+          <ul id="history-list" class="history-list"></ul>
+
+          <section id="history-detail" class="history-detail" hidden aria-labelledby="history-detail-name">
+            <div class="row">
+              <h3 id="history-detail-name" class="minor">Run</h3>
+              <span id="history-detail-state" class="state idle">Idle</span>
+            </div>
+            <dl id="history-detail-meta" class="meta"></dl>
+            <h4 class="minor">Arguments</h4>
+            <dl id="history-detail-arguments" class="confirm-params"></dl>
+            <p id="history-detail-no-arguments" class="subtle" hidden>This scenario takes no arguments.</p>
+            <h4 class="minor">Commands as executed</h4>
+            <ol id="history-detail-steps" class="history-steps"></ol>
+            <h4 class="minor">Output</h4>
+            <div id="history-detail-logs" class="logs" tabindex="0" role="region" aria-label="Archived run output"></div>
+          </section>
         </section>
 
         <section class="tab-panel section" id="panel-add-scenario" role="tabpanel" aria-labelledby="add-scenario-heading" hidden>
@@ -182,7 +208,10 @@
             <div><dt>Started</dt><dd id="run-started">—</dd></div>
             <div><dt id="run-elapsed-label">Elapsed</dt><dd id="run-elapsed">—</dd></div>
             <div id="run-exit-field" hidden><dt>Exit code</dt><dd id="run-exit">—</dd></div>
+            <div id="run-safe-state-field" hidden><dt>Safe state</dt><dd id="run-safe-state">—</dd></div>
           </dl>
+
+          <p id="run-safe-state-warning" class="banner error" role="alert" hidden></p>
 
           <div class="row output-row">
             <h3 class="minor">Output</h3>
@@ -195,7 +224,11 @@
           <p id="stop-error" class="banner error" role="alert" hidden></p>
           <div class="actions">
             <button type="button" id="stop" class="btn danger" disabled>Stop scenario</button>
+            <button type="button" id="safe-state" class="btn danger safe-state-button">
+              <span class="glyph" aria-hidden="true">■</span>All stop
+            </button>
           </div>
+          <p class="subtle">All stop halts anything running and returns every configured transmitter to its safe state.</p>
           </section>
       </main>
     </div>

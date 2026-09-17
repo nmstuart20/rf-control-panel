@@ -1,11 +1,16 @@
-const ACTIVE_STATES = ['starting', 'running', 'stopping'];
+const ACTIVE_STATES = ['starting', 'running', 'stopping', 'cleanup'];
 const RUN_STATE_LABELS = {
   starting: 'Starting', running: 'Running', stopping: 'Stopping',
-  stopped: 'Stopped', completed: 'Completed', failed: 'Failed',
+  cleanup: 'Cleanup', stopped: 'Stopped', completed: 'Completed',
+  failed: 'Failed', interrupted: 'Interrupted',
 };
 const RUN_STATE_TONES = {
-  starting: 'warn', running: 'info', stopping: 'warn',
-  stopped: 'idle', completed: 'ok', failed: 'bad',
+  starting: 'warn', running: 'info', stopping: 'warn', cleanup: 'warn',
+  stopped: 'idle', completed: 'ok', failed: 'bad', interrupted: 'bad',
+};
+const SAFE_STATE_LABELS = {
+  pending: 'Not reached', ok: 'Confirmed', degraded: 'Partly confirmed',
+  failed: 'NOT CONFIRMED', skipped: 'Not configured',
 };
 const HARDWARE_LABELS = {
   connected: 'Connected', disconnected: 'Disconnected',
@@ -34,6 +39,9 @@ const newScenarioSteps = el('new-scenario-steps');
 const newScenarioStopSteps = el('new-scenario-stop-steps');
 const addHardwareForm = el('add-hardware-form');
 const addHardwareSubmit = el('add-hardware-submit');
+const safeStateButton = el('safe-state');
+const historyList = el('history-list');
+const historyDetail = el('history-detail');
 
 let scenarios = [];
 let selectedId = null;
@@ -45,6 +53,8 @@ let stopPending = false;
 let logView = {runId: null, rendered: 0};
 let stepTracker = {runId: null, index: -1};
 let activeTab = 'scenarios';
+let safeStatePending = false;
+let selectedHistoryId = null;
 let rfSwitchUnlocked = true;
 let editorFieldSequence = 0;
 
@@ -111,7 +121,7 @@ function renderScenarioList() {
 function selectTab(tab) {
   activeTab = tab;
   const leftTab = tab === 'add-scenario' ? 'scenarios' : tab === 'add-hardware' ? 'hardware' : tab;
-  for (const name of ['scenarios', 'hardware', 'rf-switch', 'add-scenario', 'add-hardware']) {
+  for (const name of ['scenarios', 'hardware', 'rf-switch', 'history', 'add-scenario', 'add-hardware']) {
     const button = el(`tab-${name}`);
     const panel = el(`panel-${name}`);
     const selected = name === tab;
@@ -123,6 +133,7 @@ function selectTab(tab) {
     panel.hidden = !selected;
   }
   el('run-section').hidden = tab !== 'scenarios';
+  if (tab === 'history') loadHistory();
   scenarioPickerPanel.classList.toggle('is-visible', leftTab === 'scenarios');
   scenarioPickerPanel.setAttribute('aria-hidden', String(leftTab !== 'scenarios'));
   hardwarePickerPanel.classList.toggle('is-visible', leftTab === 'hardware');
@@ -598,6 +609,22 @@ async function stopRun() {
   }
 }
 
+async function requestSafeState() {
+  if (safeStatePending) return;
+  safeStatePending = true;
+  safeStateButton.disabled = true;
+  clearError(el('stop-error'));
+  try {
+    await api('/api/safe-state', {method: 'POST', body: '{}'});
+    await poll();
+  } catch (error) {
+    showError(el('stop-error'), `All stop failed: ${error.message}`);
+  } finally {
+    safeStatePending = false;
+    safeStateButton.disabled = false;
+  }
+}
+
 /* Run status ------------------------------------------------------------- */
 
 function setLocked(value) {
@@ -614,9 +641,14 @@ function formatDuration(seconds) {
 }
 
 function renderRun(run) {
+  const previous = currentRun;
   currentRun = run;
   const running = Boolean(run) && ACTIVE_STATES.includes(run.state);
   setLocked(running);
+  if (previous && run && previous.id === run.id
+      && ACTIVE_STATES.includes(previous.state) && !running && activeTab === 'history') {
+    loadHistory();
+  }
 
   stopButton.disabled = !running || stopPending || run.state === 'stopping';
   stopButton.textContent = stopPending || run?.state === 'stopping' ? 'Stopping…' : 'Stop scenario';
@@ -692,6 +724,181 @@ function renderMeta(run) {
   const showExit = run.exit_code !== null && run.exit_code !== undefined && !ACTIVE_STATES.includes(run.state);
   el('run-exit-field').hidden = !showExit;
   if (showExit) el('run-exit').textContent = String(run.exit_code);
+  renderSafeState(run);
+}
+
+// Whether the transmitters were confirmed off matters more than the exit code,
+// so an unconfirmed safe state is called out rather than left in the metadata.
+function renderSafeState(run) {
+  const safeState = run.safe_state || 'pending';
+  const finished = !ACTIVE_STATES.includes(run.state);
+  el('run-safe-state-field').hidden = !finished || safeState === 'skipped';
+  el('run-safe-state').textContent = SAFE_STATE_LABELS[safeState] || safeState;
+
+  const warning = el('run-safe-state-warning');
+  const messages = [];
+  if (finished && safeState === 'failed') {
+    messages.push('Hardware may still be transmitting.');
+  }
+  if (finished && safeState === 'degraded') {
+    messages.push('An optional safe state step could not be reached. Confirm that device by hand.');
+  }
+  if (run.force_killed) {
+    messages.push('A command had to be killed, so its own hardware cleanup did not run.');
+  }
+  if (messages.length) {
+    showError(warning, messages.join(' '));
+  } else {
+    clearError(warning);
+  }
+}
+
+/* Run history ------------------------------------------------------------ */
+
+async function loadHistory() {
+  clearError(el('history-error'));
+  try {
+    const data = await api('/api/runs');
+    renderHistoryList(data.runs || []);
+  } catch (error) {
+    historyList.replaceChildren();
+    showError(el('history-error'), `Unable to load run history: ${error.message}`);
+  }
+}
+
+function renderHistoryList(runs) {
+  historyList.replaceChildren();
+  if (!runs.length) {
+    const item = document.createElement('li');
+    item.className = 'detail';
+    item.textContent = 'No runs have been archived yet.';
+    historyList.append(item);
+    historyDetail.hidden = true;
+    return;
+  }
+  for (const run of runs) {
+    const item = document.createElement('li');
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'history-entry';
+    button.classList.toggle('selected', run.id === selectedHistoryId);
+
+    const name = document.createElement('span');
+    name.className = 'history-name';
+    name.textContent = run.scenario_name || run.scenario_id;
+
+    const when = document.createElement('span');
+    when.className = 'history-when';
+    when.textContent = new Date(run.started_at * 1000).toLocaleString();
+
+    const state = document.createElement('span');
+    setState(state, RUN_STATE_TONES[run.state] || 'idle', RUN_STATE_LABELS[run.state] || run.state);
+
+    button.append(name, when, state);
+    if (run.safe_state === 'failed' || run.force_killed) {
+      const flag = document.createElement('span');
+      flag.className = 'state bad';
+      flag.textContent = 'Check hardware';
+      button.append(flag);
+    }
+    button.addEventListener('click', () => showHistoryEntry(run.id));
+    item.append(button);
+    historyList.append(item);
+  }
+}
+
+async function showHistoryEntry(runId) {
+  selectedHistoryId = runId;
+  clearError(el('history-error'));
+  try {
+    const data = await api(`/api/runs/${encodeURIComponent(runId)}`);
+    renderHistoryEntry(data.run);
+  } catch (error) {
+    historyDetail.hidden = true;
+    showError(el('history-error'), `Unable to load run ${runId}: ${error.message}`);
+    return;
+  }
+  for (const button of historyList.querySelectorAll('.history-entry')) {
+    button.classList.remove('selected');
+  }
+  loadHistory();
+}
+
+function renderHistoryEntry(run) {
+  historyDetail.hidden = false;
+  el('history-detail-name').textContent = run.scenario_name || run.scenario_id;
+  setState(
+    el('history-detail-state'),
+    RUN_STATE_TONES[run.state] || 'idle',
+    RUN_STATE_LABELS[run.state] || run.state,
+  );
+
+  const meta = el('history-detail-meta');
+  meta.replaceChildren();
+  const duration = run.finished_at ? formatDuration(run.finished_at - run.started_at) : '—';
+  const entries = [
+    ['Started', new Date(run.started_at * 1000).toLocaleString()],
+    ['Duration', duration],
+    ['Exit code', run.exit_code === null || run.exit_code === undefined ? '—' : String(run.exit_code)],
+    ['Safe state', SAFE_STATE_LABELS[run.safe_state] || run.safe_state || '—'],
+  ];
+  if (run.force_killed) entries.push(['Force killed', 'Yes — cleanup did not run']);
+  for (const [term, value] of entries) {
+    const row = document.createElement('div');
+    const dt = document.createElement('dt');
+    dt.textContent = term;
+    const dd = document.createElement('dd');
+    dd.textContent = value;
+    row.append(dt, dd);
+    meta.append(row);
+  }
+
+  const args = el('history-detail-arguments');
+  args.replaceChildren();
+  const argumentEntries = Object.entries(run.arguments || {});
+  args.hidden = !argumentEntries.length;
+  el('history-detail-no-arguments').hidden = Boolean(argumentEntries.length);
+  for (const [name, value] of argumentEntries) {
+    const dt = document.createElement('dt');
+    dt.textContent = name;
+    const dd = document.createElement('dd');
+    dd.textContent = value;
+    args.append(dt, dd);
+  }
+
+  const steps = el('history-detail-steps');
+  steps.replaceChildren();
+  for (const step of run.steps || []) {
+    const item = document.createElement('li');
+    const name = document.createElement('span');
+    name.className = 'step-name';
+    name.textContent = step.name || 'Step';
+    const command = document.createElement('code');
+    command.className = 'history-command';
+    command.textContent = (step.command || []).join(' ');
+    item.append(name, command);
+    if (step.background) {
+      const badge = document.createElement('span');
+      badge.className = 'state idle';
+      badge.textContent = 'Background';
+      item.append(badge);
+    }
+    steps.append(item);
+  }
+
+  const logs = el('history-detail-logs');
+  logs.replaceChildren();
+  const lines = run.logs || [];
+  if (!lines.length) {
+    const empty = document.createElement('p');
+    empty.className = 'log-empty';
+    empty.textContent = 'No output was recorded.';
+    logs.append(empty);
+    return;
+  }
+  const fragment = document.createDocumentFragment();
+  for (const line of lines) fragment.append(logLine(line));
+  logs.append(fragment);
 }
 
 function updateElapsed() {
@@ -760,6 +967,8 @@ confirmDialog.addEventListener('close', () => {
 });
 
 stopButton.addEventListener('click', stopRun);
+safeStateButton.addEventListener('click', requestSafeState);
+el('refresh-history').addEventListener('click', loadHistory);
 
 el('clear-logs').addEventListener('click', () => {
   logsBox.replaceChildren(logEmpty);
@@ -791,7 +1000,7 @@ addHardwareForm.addEventListener('input', updateAddHardwareButton);
 addHardwareForm.addEventListener('change', updateAddHardwareButton);
 updateAddHardwareButton();
 
-for (const tab of ['scenarios', 'hardware', 'rf-switch']) {
+for (const tab of ['scenarios', 'hardware', 'rf-switch', 'history']) {
   el(`tab-${tab}`).addEventListener('click', () => selectTab(tab));
 }
 el('rf-switch-auth-form').addEventListener('submit', unlockRfSwitch);

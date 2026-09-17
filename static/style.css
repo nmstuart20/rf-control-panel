@@ -170,8 +170,10 @@ input[type="number"]:disabled { background: var(--canvas-subtle); color: var(--f
 .btn.danger:disabled { color: var(--fg-subtle); }
 .btn.small { padding: 2px 8px; font-size: 12px; }
 .btn .glyph { font-size: 10px; }
-.actions { display: flex; justify-content: flex-end; margin-top: 16px; }
+.actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-top: 16px; }
 .scenario-config .actions { justify-content: center; }
+.safe-state-button { border-color: rgba(248, 81, 73, 0.5); background: rgba(248, 81, 73, 0.14); font-weight: 600; }
+.safe-state-button:hover:not(:disabled) { background: rgba(248, 81, 73, 0.24); }
 
 /* Run summary */
 .run-name { margin-top: 8px; font-weight: 500; }
@@ -187,6 +189,33 @@ input[type="number"]:disabled { background: var(--canvas-subtle); color: var(--f
 .meta { display: flex; flex-wrap: wrap; gap: 12px 40px; margin-top: 16px; }
 .meta dt { color: var(--fg-muted); font-size: 12px; }
 .meta dd { margin-top: 2px; font-size: 13px; font-variant-numeric: tabular-nums; }
+
+/* Run history */
+.history-list { list-style: none; margin: 16px 0 0; padding: 0; }
+.history-list .detail { padding: 8px 0; color: var(--fg-muted); font-size: 13px; }
+.history-entry {
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 16px;
+  width: 100%; padding: 9px 8px; border: 0; border-bottom: 1px solid var(--border-muted);
+  background: transparent; color: var(--fg); font: inherit; font-size: 13px;
+  text-align: left; cursor: pointer;
+}
+.history-entry:hover { background: var(--canvas-subtle); }
+.history-entry.selected { background: rgba(82, 214, 106, 0.1); box-shadow: inset 3px 0 0 var(--success); }
+.history-entry:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.history-name { flex: 1 1 auto; min-width: 0; font-weight: 500; }
+.history-when { color: var(--fg-muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+.history-detail { margin-top: 24px; padding-top: 16px; border-top: 1px solid var(--border); }
+.history-detail h4.minor { margin: 20px 0 8px; color: var(--fg-muted); font-size: 12px; font-weight: 600; text-transform: uppercase; }
+.history-steps { margin: 0; padding-left: 20px; }
+.history-steps li { margin-bottom: 8px; font-size: 13px; }
+.history-steps .step-name { display: block; font-weight: 500; }
+.history-command {
+  display: block; margin-top: 2px; padding: 4px 8px; border-radius: 4px;
+  background: var(--canvas-inset); color: var(--fg-muted);
+  font: 12px/1.5 ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  overflow-wrap: anywhere;
+}
+.history-detail .logs { height: 260px; margin-bottom: 8px; }
 
 /* Logs */
 .logs {

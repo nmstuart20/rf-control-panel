@@ -17,6 +17,12 @@ chmod +x modem_control.sh
 python3 src/server.py
 ```
 
+Run the tests with:
+
+```bash
+python3 -m unittest tests.test_server
+```
+
 To password-protect the RF switch config tab, set `RF_SWITCH_PASSWORD` before
 starting the server. The password is checked by the server and is never sent to
 the browser as configuration:
@@ -44,13 +50,38 @@ probe once in the top-level `hardware_checks` object. Current supported probes a
 ```json
 "hardware_checks": {
   "Signal Hound VSG60A": {"type": "signalhound"},
-  "Ettus X310": {"type": "command", "command": ["uhd_find_devices"]},
-  "Modem": {"type": "tcp", "host": "192.0.2.10", "port": 23},
-  "Quintech switch": {"type": "tcp", "host": "192.0.2.20", "port": 9100}
+  "Modem": {"type": "command", "address": "http://192.0.2.10", "command": ["./modem_control.sh", "{@Modem}", "status"]},
+  "Quintech switch": {"type": "tcp", "address": "192.0.2.20", "port": 9100}
 }
 ```
 
+A `signalhound` check opens and closes the generator, a `command` check runs a
+command and treats a non-zero exit as disconnected, and a `tcp` check opens a
+socket.
+
 The equipment name in `hardware_checks` must exactly match the name in a scenario.
+
+## Device addresses
+
+Give each device an `address` in `hardware_checks` and refer to it from any
+command with `{@Device name}`.
+
+```json
+"hardware_checks": {
+  "Comtech modem 1": {
+    "type": "command",
+    "address": "http://10.0.1.154",
+    "command": ["./modem_control.sh", "{@Comtech modem 1}", "status"]
+  }
+},
+"scenarios": [
+  {
+    "steps": [
+      {"name": "Enable transmitter", "command": ["./modem_control.sh", "{@Comtech modem 1}", "enable-transmit", "{level}"]}
+    ]
+  }
+]
+```
 
 Scenarios can expose numeric arguments in the panel. Put a full placeholder in a
 command value to substitute the validated input:
@@ -86,23 +117,10 @@ argument placeholders and `environment` in the same way as regular steps:
 ]
 ```
 
-Stop steps are not run when a scenario completes normally. A scenario remains
-failed after its cleanup commands run if one of its regular steps failed.
+## Run history
 
-```json
-{
-  "id": "lab-test",
-  "name": "Lab test",
-  "description": "Configure the path, modem, and radio, then transmit.",
-  "equipment": ["Quintech", "modem", "X310", "VSG60A"],
-  "steps": [
-    {"name": "Select RF path", "command": ["./scripts/quintech.sh", "path-a"]},
-    {"name": "Configure modem", "command": ["./scripts/modem.sh", "test-profile"]},
-    {"name": "Configure X310", "command": ["python3", "-u", "scripts/x310_setup.py", "--profile", "test"]},
-    {"name": "Transmit", "command": ["python3", "-u", "-m", "src.signalhound.sweep", "--mode", "chirp", "--duration", "10"]}
-  ]
-}
-```
+Every run is archived under `runs/<date>-<time>-<run id>/`:
+
 
 When using Signal Hound, place `vsg_api.py` and `libvsg_api.so.1.2.1` in the project-root `vsgdevice/` directory.
 
@@ -111,3 +129,4 @@ When using Signal Hound, place `vsg_api.py` and `libvsg_api.so.1.2.1` in the pro
 
 - Multiple scenarios open at as tabs
 - More modem config control (voltage on RF out)
+- Record measured RF levels as structured data in the run archive, rather than leaving them only in the log text

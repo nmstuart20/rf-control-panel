@@ -455,8 +455,18 @@ def main() -> int:
     password = os.environ.get(args.password_env)
     if password is None:
         password = dotenv_value(PROJECT_ROOT / ".env", args.password_env)
-    if password is None:
+    # Only prompt when a person is there to answer. Run from the control panel
+    # there is no terminal, so a prompt would hang and then die on EOF, leaving
+    # the run log with a bare "Password for ..." line and no explanation.
+    if password is None and sys.stdin.isatty():
         password = getpass.getpass(f"Password for {args.username}@{args.host}: ")
+    if password is None:
+        print(
+            f"ERROR: no switch password available; set {args.password_env} in the "
+            f"environment or add it to {PROJECT_ROOT / '.env'}",
+            file=sys.stderr,
+        )
+        return 2
     try:
         connect_crosspoint(
             args.host,
